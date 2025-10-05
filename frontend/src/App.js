@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Homepage from "./pages/Homepage";
 import EssayEditor from "./pages/EssayEditor";
 import RecentPage from "./pages/RecentPage";
+import TestConnection from "./pages/TestConnection";
 
 function App() {
   return (
@@ -10,6 +11,7 @@ function App() {
         <Route path="/" element={<Homepage />} />
         <Route path="/essay/:id" element={<EssayEditor />} />
         <Route path="/recent" element={<RecentPage />} />
+        <Route path="/test-connection" element={<TestConnection />} />
       </Routes>
     </BrowserRouter>
   );
