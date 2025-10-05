@@ -445,3 +445,127 @@ def create_bibliography(
         header = "Works Cited\n\n"
     
     return header + "\n\n".join(refs)
+
+def export_bibtex(literature_list: List[LiteratureItem]) -> str:
+    """
+    Export literature list as BibTeX format
+    
+    Args:
+        literature_list: List of LiteratureItem objects
+        
+    Returns:
+        BibTeX formatted string
+    """
+    bibtex_entries = []
+    
+    for i, lit in enumerate(literature_list, start=1):
+        # Generate citation key (first_author_year)
+        if lit.authors and len(lit.authors) > 0:
+            first_author_last = lit.authors[0].name.split()[-1].lower()
+        else:
+            first_author_last = "unknown"
+        
+        year = ReferenceFormatter._extract_year(lit.published_date)
+        citation_key = f"{first_author_last}{year}_{i}"
+        
+        # Determine entry type
+        entry_type = "article" if lit.journal else "misc"
+        
+        # Build BibTeX entry
+        entry = f"@{entry_type}{{{citation_key},\n"
+        entry += f"  title = {{{lit.title}}},\n"
+        
+        # Authors
+        if lit.authors:
+            author_str = " and ".join(a.name for a in lit.authors)
+            entry += f"  author = {{{author_str}}},\n"
+        
+        # Year
+        if year != "n.d.":
+            entry += f"  year = {{{year}}},\n"
+        
+        # Journal
+        if lit.journal:
+            entry += f"  journal = {{{lit.journal}}},\n"
+        
+        # Volume and issue
+        if lit.volume:
+            entry += f"  volume = {{{lit.volume}}},\n"
+        if lit.issue:
+            entry += f"  number = {{{lit.issue}}},\n"
+        if lit.pages:
+            entry += f"  pages = {{{lit.pages}}},\n"
+
+        # Abstract
+        if lit.abstract:
+            abstract_clean = lit.abstract.replace('{', '\\{').replace('}', '\\}')
+            entry += f"  abstract = {{{abstract_clean}}},\n"
+        
+        # DOI or URL
+        if lit.doi:
+            entry += f"  doi = {{{lit.doi}}},\n"
+        elif lit.url:
+            entry += f"  url = {{{lit.url}}},\n"
+        
+        entry += "}\n"
+        bibtex_entries.append(entry)
+    
+    return "\n".join(bibtex_entries)
+
+
+def export_ris(literature_list: List[LiteratureItem]) -> str:
+    """
+    Export literature list as RIS format (for EndNote, Zotero, etc.)
+    
+    Args:
+        literature_list: List of LiteratureItem objects
+        
+    Returns:
+        RIS formatted string
+    """
+    ris_entries = []
+    
+    for lit in literature_list:
+        entry = "TY  - JOUR\n"  # Journal article type
+        
+        # Title
+        entry += f"TI  - {lit.title}\n"
+        
+        # Authors
+        if lit.authors:
+            for author in lit.authors:
+                entry += f"AU  - {author.name}\n"
+        
+        # Year
+        year = ReferenceFormatter._extract_year(lit.published_date)
+        if year != "n.d.":
+            entry += f"PY  - {year}\n"
+        
+        # Journal
+        if lit.journal:
+            entry += f"JO  - {lit.journal}\n"
+        
+        # Volume, Issue, Pages
+        if lit.volume:
+            entry += f"VL  - {lit.volume}\n"
+        if lit.issue:
+            entry += f"IS  - {lit.issue}\n"
+        if lit.pages:
+            entry += f"SP  - {lit.pages}\n"
+        
+        # DOI
+        if lit.doi:
+            entry += f"DO  - {lit.doi}\n"
+        
+        # URL
+        if lit.url:
+            entry += f"UR  - {lit.url}\n"
+        
+        # Abstract
+        if lit.abstract:
+            entry += f"AB  - {lit.abstract}\n"
+        
+        entry += "ER  - \n\n"
+        ris_entries.append(entry)
+    
+    return "".join(ris_entries)

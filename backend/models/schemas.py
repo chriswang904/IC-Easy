@@ -3,6 +3,21 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Literal
 from datetime import datetime, date
 
+# Added Advanced Search
+class AdvancedSearchFilters(BaseModel):
+    year_min: Optional[int] = Field(None, description="Minimum publication year")
+    year_max: Optional[int] = Field(None, description="Maximum publication year")
+    min_citations: Optional[int] = Field(None, description="Minimum citation count")
+    authors: Optional[List[str]] = Field(None, description="Filter by author names")
+    journals: Optional[List[str]] = Field(None, description="Filter by journal or conference")
+    open_access_only: Optional[bool] = Field(False, description="Only include open access papers")
+    sort_by: Optional[str] = Field("relevance", description="Sort by: relevance | citations | year | journal_impact")
+
+class LiteratureAdvancedSearchRequest(BaseModel):
+    keyword: str
+    limit: int = 10
+    filters: Optional[AdvancedSearchFilters] = None
+
 # Literature search request schema
 class LiteratureSearchRequest(BaseModel):
     keyword: str = Field(..., min_length=1, description="Search keyword")

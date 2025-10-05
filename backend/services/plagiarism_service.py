@@ -1,10 +1,12 @@
 # services/plagiarism_service.py
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import util
 import numpy as np
 from typing import List, Dict
 import re
 import logging
+import nltk
 
 logger = logging.getLogger(__name__)
 
@@ -205,3 +207,94 @@ class PlagiarismService:
         text = re.sub(r'[^a-zA-Z0-9\s.,;:\-()\[\]%]', '', text)
         
         return text.strip().lower()
+    
+
+
+    def check_sentence_similarity(self, user_text: str, reference_texts: List[str]) -> Dict:
+        """Check similarity at sentence level with caching for better performance"""
+        
+        if not self.semantic_model:
+            return {"error": "Semantic model not available"}
+        
+        try:
+            from sentence_transformers import util
+            import nltk
+            
+            # Ensure punkt tokenizer
+            try:
+                nltk.data.find('tokenizers/punkt')
+            except LookupError:
+                nltk.download('punkt', quiet=True)
+            
+            # Split user text into sentences
+            user_sentences = nltk.sent_tokenize(user_text)
+            
+            # Pre-compute embeddings for ALL reference sentences (CACHE)
+            ref_sentences_cache = []
+            ref_embeddings_cache = []
+            
+            for ref_text in reference_texts:
+                ref_sents = nltk.sent_tokenize(ref_text)
+                ref_sentences_cache.append(ref_sents)
+                
+                # Encode all sentences from this reference at once
+                ref_embs = self.semantic_model.encode(
+                    ref_sents, 
+                    convert_to_tensor=True,
+                    show_progress_bar=False
+                )
+                ref_embeddings_cache.append(ref_embs)
+            
+            # Encode user sentences once
+            user_embeddings = self.semantic_model.encode(
+                user_sentences, 
+                convert_to_tensor=True,
+                show_progress_bar=False
+            )
+            
+            # Now compare efficiently using cached embeddings
+            sentence_matches = []
+            
+            for i, user_sent in enumerate(user_sentences):
+                max_sim = 0.0
+                best_ref_idx = -1
+                best_ref_sent = ""
+                
+                # Compare against all cached reference embeddings
+                for ref_idx, ref_embs in enumerate(ref_embeddings_cache):
+                    similarities = util.cos_sim(
+                        user_embeddings[i:i+1], 
+                        ref_embs
+                    ).squeeze()
+                    
+                    # Handle single vs multiple sentences
+                    if ref_embs.shape[0] == 1:
+                        sim_score = similarities.item()
+                        best_sent_idx = 0
+                    else:
+                        sim_score = similarities.max().item()
+                        best_sent_idx = similarities.argmax().item()
+                    
+                    if sim_score > max_sim:
+                        max_sim = sim_score
+                        best_ref_idx = ref_idx
+                        best_ref_sent = ref_sentences_cache[ref_idx][best_sent_idx]
+                
+                sentence_matches.append({
+                    "user_sentence": user_sent,
+                    "similarity": float(max_sim),
+                    "reference_index": best_ref_idx,
+                    "matched_sentence": best_ref_sent,
+                    "is_suspicious": max_sim > 0.7
+                })
+            
+            return {
+                "sentence_matches": sentence_matches,
+                "suspicious_count": sum(1 for m in sentence_matches if m["is_suspicious"]),
+                "total_sentences": len(user_sentences),
+                "method": "sentence-level-semantic"
+            }
+            
+        except Exception as e:
+            logger.error(f"[PlagiarismService] Sentence similarity failed: {e}")
+            return {"error": str(e)}

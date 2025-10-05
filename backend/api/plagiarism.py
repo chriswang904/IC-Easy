@@ -77,3 +77,29 @@ async def health_check():
         "service": "plagiarism",
         "available_methods": ["tfidf", "semantic"]
     }
+
+@router.post("/check-sentences", response_model=dict)
+async def check_sentence_plagiarism(request: PlagiarismCheckRequest):
+    """
+    Check plagiarism at sentence level with highlighting
+    
+    Returns detailed sentence-by-sentence similarity analysis
+    """
+    try:
+        if not request.user_text or not request.reference_texts:
+            raise HTTPException(status_code=400, detail="Invalid input")
+        
+        result = plagiarism_service.check_sentence_similarity(
+            request.user_text,
+            request.reference_texts
+        )
+        
+        if 'error' in result:
+            raise HTTPException(status_code=500, detail=result['error'])
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

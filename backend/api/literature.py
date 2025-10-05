@@ -1,6 +1,9 @@
 # api/literature.py
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi.responses import PlainTextResponse
+from typing import List, Optional
 from models.schemas import (
+    LiteratureAdvancedSearchRequest,
     LiteratureSearchRequest,
     LiteratureSearchResponse,
     ReferenceFormatRequest,
@@ -10,13 +13,22 @@ from models.schemas import (
 from services.crossref_service import CrossRefService
 from services.arxiv_service import ArXivService
 from services.openalex_service import OpenAlexService
+from services.literature_aggregator import LiteratureAggregator
+from services.history_service import HistoryService
 from utils.reference_formatter import ReferenceFormatter
+from database import get_db
 from typing import Optional
+from sqlalchemy.orm import Session
 import logging
+
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/literature", tags=["Literature"])
+
+# Initialize aggregator
+literature_aggregator = LiteratureAggregator()
+
 
 # Initialize services
 crossref_service = CrossRefService()
@@ -243,10 +255,96 @@ async def health_check():
     """Health check endpoint for literature API"""
 
     logger.debug("[Health Check] Literature API health check requested")
-    
+
     return {
         "status": "healthy",
         "service": "literature",
         "available_sources": ["crossref", "arxiv", "openalex"],
         "available_formats": ["apa", "ieee", "mla"]
     }
+
+# Added search-all 
+@router.post("/search-all", response_model=LiteratureSearchResponse)
+async def search_all_sources(
+    request: LiteratureAdvancedSearchRequest, 
+    db: Session = Depends(get_db)
+):
+    """
+    Search literature across ALL sources with filters and history logging
+    """
+    if not request.keyword.strip():
+        raise HTTPException(status_code=400, detail="Keyword cannot be empty")
+    
+    logger.info(f"[Advanced Search] Keyword='{request.keyword}', Filters={request.filters}")
+    
+    try:
+        # Perform aggregated search
+        results = await literature_aggregator.search_all_sources(
+            keyword=request.keyword,
+            limit_per_source=request.limit,
+            filters=request.filters.dict() if request.filters else None
+        )
+        
+        # Log to history
+        HistoryService(db).log_search(
+            keyword=request.keyword,
+            source="all",
+            total_results=len(results)
+        )
+        
+        logger.info(f"[Advanced Search] Returned {len(results)} results")
+        
+        return LiteratureSearchResponse(
+            total=len(results),
+            results=results,
+            source="all"
+        )
+        
+    except Exception as e:
+        logger.error(f"[Advanced Search] Failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@router.post("/export-bibtex", response_class=PlainTextResponse)
+async def export_bibtex_format(literature_list: List[LiteratureItem]):
+    """
+    Export literature list as BibTeX file
+    
+    Args:
+        literature_list: List of LiteratureItem objects
+        
+    Returns:
+        BibTeX formatted text file
+    """
+    try:
+        from utils.reference_formatter import export_bibtex
+        
+        bibtex_content = export_bibtex(literature_list)
+        
+        return PlainTextResponse(
+            content=bibtex_content,
+            media_type="application/x-bibtex",
+            headers={"Content-Disposition": "attachment; filename=references.bib"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/export-ris", response_class=PlainTextResponse)
+async def export_ris_format(literature_list: List[LiteratureItem]):
+    """Export literature list as RIS file (EndNote/Zotero compatible)"""
+    try:
+        from utils.reference_formatter import export_ris
+        
+        ris_content = export_ris(literature_list)
+        
+        return PlainTextResponse(
+            content=ris_content,
+            media_type="application/x-research-info-systems",
+            headers={"Content-Disposition": "attachment; filename=references.ris"}
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+

@@ -12,19 +12,19 @@ Version: 1.0.0
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from api import literature, plagiarism
+from api import literature, plagiarism, history
 import os
 import logging
 import sys
 from datetime import datetime
 from dotenv import load_dotenv
+from database import engine, Base
+from sqlalchemy import text
 
 # Load environment variables from .env file
 load_dotenv()
 
-# ============================================================================
 # LOGGING CONFIGURATION
-# ============================================================================
 
 # Configure logging format and level
 logging.basicConfig(
@@ -39,9 +39,8 @@ logging.basicConfig(
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-# ============================================================================
+
 # FASTAPI APPLICATION INITIALIZATION
-# ============================================================================
 
 # Create FastAPI application instance with metadata
 app = FastAPI(
@@ -56,9 +55,11 @@ app = FastAPI(
     openapi_url="/openapi.json" # OpenAPI schema
 )
 
-# ============================================================================
+
+# Create DB tables
+Base.metadata.create_all(bind=engine)
+
 # CORS MIDDLEWARE CONFIGURATION
-# ============================================================================
 
 # Get allowed origins from environment variable or use default
 origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001").split(",")
@@ -77,9 +78,8 @@ app.add_middleware(
     max_age=3600,                    # Cache preflight requests for 1 hour
 )
 
-# ============================================================================
+
 # GLOBAL EXCEPTION HANDLER
-# ============================================================================
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -109,9 +109,8 @@ async def global_exception_handler(request: Request, exc: Exception):
         }
     )
 
-# ============================================================================
+
 # STARTUP AND SHUTDOWN EVENTS
-# ============================================================================
 
 @app.on_event("startup")
 async def startup_event():
@@ -131,13 +130,17 @@ async def startup_event():
     logger.info(f"[Startup] Allowed CORS origins: {origins}")
     logger.info("[Startup] Initializing services...")
     
-    # Initialize services (if needed)
     try:
-        # You can add service initialization here
-        # For example: warming up ML models, checking API connections, etc.
-        logger.info("[Startup] All services initialized successfully")
+        
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("[Startup] Database connection successful")
+        
+        # Create tables if not exist
+        Base.metadata.create_all(bind=engine)
+        logger.info("[Startup] Database tables verified")
     except Exception as e:
-        logger.error(f"[Startup] Service initialization failed: {str(e)}", exc_info=True)
+        logger.error(f"[Startup] Database initialization failed: {e}")
         raise
     
     logger.info("[Startup] Application startup complete")
@@ -157,16 +160,12 @@ async def shutdown_event():
     logger.info("Chrome AI Challenge Backend API - Shutting Down")
     logger.info("=" * 60)
     logger.info("[Shutdown] Cleaning up resources...")
-    
-    # Cleanup code here (if needed)
-    # For example: closing database connections, saving cache, etc.
-    
+
     logger.info("[Shutdown] Application shutdown complete")
     logger.info("=" * 60)
 
-# ============================================================================
+
 # REQUEST MIDDLEWARE (Optional - for logging all requests)
-# ============================================================================
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -223,9 +222,7 @@ async def log_requests(request: Request, call_next):
         )
         raise
 
-# ============================================================================
 # ROUTE REGISTRATION
-# ============================================================================
 
 # Include API routers
 logger.info("[Route Registration] Registering literature routes...")
@@ -234,11 +231,14 @@ app.include_router(literature.router)
 logger.info("[Route Registration] Registering plagiarism routes...")
 app.include_router(plagiarism.router)
 
+logger.info("[Route Registration] Registering history routes...")
+app.include_router(history.router)
+
 logger.info("[Route Registration] All routes registered successfully")
 
-# ============================================================================
+
 # ROOT ENDPOINTS
-# ============================================================================
+
 
 @app.get("/")
 async def root():
@@ -381,9 +381,7 @@ async def api_info():
         }
     }
 
-# ============================================================================
 # DEVELOPMENT SERVER RUNNER
-# ============================================================================
 
 if __name__ == "__main__":
     import uvicorn
