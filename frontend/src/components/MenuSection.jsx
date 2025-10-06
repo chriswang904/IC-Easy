@@ -24,7 +24,7 @@ function MenuSection() {
       role="navigation"
       aria-label="Main menu"
     >
-      <ul className="flex flex-col items-start relative flex-1 grow overflow-auto">
+      <ul className="flex flex-col items-start relative flex-1 overflow-y-auto scrollbar-hide">
         {menuItems.map((item) => (
           <li
             key={item.id}

@@ -1,14 +1,14 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, Edit, Star, Clock, BookOpen } from "lucide-react";
+import { Menu, Edit, Star, Archive, Globe, Sparkles } from "lucide-react";
 
 function Sidebar() {
   const navigate = useNavigate();
 
   const navigationItems = [
-    { icon: Star, label: "Starred", path: "/starred" },
-    { icon: Clock, label: "Recent", path: "/recent" },
-    { icon: BookOpen, label: "Collections", path: "/collections" },
+    { icon: Sparkles, label: "AITool", path: "/aitool" },
+    { icon: Archive, label: "Collections", path: "/collections" },
+    { icon: Globe, label: "Explore", path: "/explore" },
   ];
 
   return (
