@@ -16,6 +16,8 @@ from services.openalex_service import OpenAlexService
 from services.literature_aggregator import LiteratureAggregator
 from services.history_service import HistoryService
 from utils.reference_formatter import ReferenceFormatter
+from utils.auth import get_current_user_optional
+from models.user_model import User
 from database import get_db
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -75,16 +77,24 @@ async def search_literature(request: LiteratureSearchRequest):
     )
 
     try:
+        # Deafault as relevance
+        sort_by = getattr(request, "sort_by", "relevance")
+
         # Route to appropriate service based on source
         if request.source == "crossref":
-            results = crossref_service.search_literature(request.keyword, request.limit)
+            results = crossref_service.search_literature(request.keyword, request.limit, sort_by)
         elif request.source == "arxiv":
-            results = arxiv_service.search_literature(request.keyword, request.limit)
+            results = arxiv_service.search_literature(request.keyword, request.limit, sort_by)
         elif request.source == "openalex":
-            results = openalex_service.search_literature(request.keyword, request.limit)
+            results = openalex_service.search_literature(request.keyword, request.limit, sort_by)
         else:
             logger.warning(f"[Literature Search] Unsupported source: {request.source}")
             raise HTTPException(status_code=400, detail=f"Unsupported source: {request.source}")
+        
+        if sort_by == "year":
+            results.sort(key=lambda x: int(x.published_date[:4]) if x.published_date else 0, reverse=True)
+        elif sort_by == "citations":
+            results.sort(key=lambda x: x.citation_count or 0, reverse=True)
         
         logger.info(f"[Literature Search] Found {len(results)} results from {request.source}")
         
@@ -267,6 +277,7 @@ async def health_check():
 @router.post("/search-all", response_model=LiteratureSearchResponse)
 async def search_all_sources(
     request: LiteratureAdvancedSearchRequest, 
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: Session = Depends(get_db)
 ):
     """
@@ -286,11 +297,13 @@ async def search_all_sources(
         )
         
         # Log to history
-        HistoryService(db).log_search(
-            keyword=request.keyword,
-            source="all",
-            total_results=len(results)
-        )
+        if current_user:
+            HistoryService(db).log_search(
+                keyword=request.keyword,
+                source="all",
+                total_results=len(results),
+                user_id=current_user.id
+            )
         
         logger.info(f"[Advanced Search] Returned {len(results)} results")
         

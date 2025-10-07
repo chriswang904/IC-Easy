@@ -77,3 +77,10 @@ class PlagiarismCheckResponse(BaseModel):
     similarity_score: float = Field(..., ge=0.0, le=1.0, description="Similarity score (0-1)")
     risk_level: str = Field(..., description="Risk level: low, medium, or high")
     details: Optional[dict] = None
+
+# Filtered Search
+class LiteratureSearchRequest(BaseModel):
+    keyword: str = Field(..., min_length=1, description="Search keyword")
+    limit: int = Field(default=10, ge=1, le=50, description="Number of results")
+    source: Literal["crossref", "arxiv", "openalex"] = Field(default="crossref")
+    sort_by: Optional[str] = Field("relevance", description="Sort by: relevance | year | citations")

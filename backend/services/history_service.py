@@ -1,7 +1,7 @@
 # backend/services/history_service.py
 from sqlalchemy.orm import Session
 from models.history_model import SearchHistory
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import Counter
 
 class HistoryService:
@@ -10,7 +10,7 @@ class HistoryService:
     def __init__(self, db: Session):
         self.db = db
 
-    def log_search(self, keyword: str, source: str, total_results: int, user_id: str = None):
+    def log_search(self, keyword: str, source: str, total_results: int, user_id: int = None):
         """Record a search event"""
         new_entry = SearchHistory(
             keyword=keyword,
@@ -24,29 +24,43 @@ class HistoryService:
         self.db.refresh(new_entry)
         return new_entry
 
-    def get_history(self, limit: int = 20):
+    def get_history(self, limit: int = 20, user_id: int = None):
         """Fetch recent search history"""
+        query = self.db.query(SearchHistory)
+
+        # If provided user_id, return user's history
+        if user_id is not None:
+            query = query.filter(SearchHistory.user_id == user_id)
+        
         return (
-            self.db.query(SearchHistory)
+            query
             .order_by(SearchHistory.timestamp.desc())
             .limit(limit)
             .all()
         )
 
-    def get_trending_keywords(self, days: int = 7, top_k: int = 10):
+
+    def get_trending_keywords(self, days: int = 7, top_k: int = 10, user_id: int = None):
         """Optimized trending keyword calculation with SQL grouping"""
         from datetime import timedelta
         from sqlalchemy import func
         
         cutoff = datetime.utcnow() - timedelta(days=days)
-        
-        # Use SQL GROUP BY instead of Python Counter for better performance
-        results = (
+
+        query = (
             self.db.query(
                 SearchHistory.keyword,
                 func.count(SearchHistory.keyword).label('count')
             )
             .filter(SearchHistory.timestamp >= cutoff)
+        )
+
+        # Filter user's history
+        if user_id is not None:
+            query = query.filter(SearchHistory.user_id == user_id)
+        
+        results = (
+            query
             .group_by(SearchHistory.keyword)
             .order_by(func.count(SearchHistory.keyword).desc())
             .limit(top_k)
@@ -54,15 +68,17 @@ class HistoryService:
         )
         
         return [{"keyword": k, "count": c} for k, c in results]
-    def cleanup_old_records(self, days: int = 30):
+    
+    def cleanup_old_records(self, days: int = 30, user_id: int = None):
         """Delete records older than specified days"""
-        from datetime import timedelta
+
         cutoff = datetime.utcnow() - timedelta(days=days)
         
-        deleted = (
-            self.db.query(SearchHistory)
-            .filter(SearchHistory.timestamp < cutoff)
-            .delete()
-        )
+        query = self.db.query(SearchHistory).filter(SearchHistory.timestamp < cutoff)
+        
+        if user_id is not None:
+            query = query.filter(SearchHistory.user_id == user_id)
+        
+        deleted = query.delete()
         self.db.commit()
         return deleted

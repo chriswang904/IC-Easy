@@ -19,7 +19,7 @@ class CrossRefService:
             'User-Agent': 'ChromeAIChallenge/1.0 (mailto:your-email@example.com)'
         })
     
-    def search_literature(self, keyword: str, limit: int = 10) -> List[LiteratureItem]:
+    def search_literature(self, keyword: str, limit: int = 10, sort_by: str = "relevance") -> List[LiteratureItem]:
         """
         Search literature using CrossRef API
         
@@ -52,6 +52,14 @@ class CrossRefService:
             for item in items:
                 literature_items.append(self._parse_crossref_item(item))
             
+            # Manual sorting (CrossRef doesn't support sort param)
+            if sort_by == "year":
+                literature_items.sort(
+                    key=lambda x: int(x.published_date[:4]) if x.published_date else 0, reverse=True
+                )
+            elif sort_by == "citations":
+                literature_items.sort(key=lambda x: x.citation_count or 0, reverse=True)
+
             return literature_items
             
         except requests.exceptions.RequestException as e:

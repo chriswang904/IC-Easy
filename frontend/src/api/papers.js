@@ -11,28 +11,25 @@ import apiClient from './client';
 
 /**
  * Search for academic literature
- * 
- * @param {Object} params - Search parameters
- * @param {string} params.keyword - Search query
- * @param {number} [params.limit=10] - Number of results (1-50)
- * @param {string} [params.source='crossref'] - Data source (crossref|arxiv|openalex)
- * @returns {Promise<Object>} Search results
- * 
- * @example
- * const results = await searchLiterature({
- *   keyword: 'machine learning',
- *   limit: 20,
- *   source: 'crossref'
- * });
  */
-export const searchLiterature = async ({ keyword, limit = 10, source = 'crossref' }) => {
+export const searchLiterature = async ({ keyword, limit = 10, source = 'crossref', sort_by = 'relevance' }) => {
   try {
-    const response = await apiClient.post('/api/literature/search', {
-      keyword,
-      limit,
-      source,
-    });
-    return response.data;
+    if (source === 'all') {
+      const response = await apiClient.post('/api/literature/search-all', {
+        keyword,
+        limit,
+        filters: { sort_by },
+      });
+      return response.data;
+    } else {
+      const response = await apiClient.post('/api/literature/search', {
+        keyword,
+        limit,
+        source,
+        sort_by,
+      });
+      return response.data;
+    }
   } catch (error) {
     console.error('[Search Literature] Error:', error);
     throw error;
@@ -134,15 +131,6 @@ export const formatReference = async ({ literature, format = 'apa' }) => {
 
 /**
  * Batch search - Search multiple keywords at once
- * 
- * @param {Array<string>} keywords - Array of search keywords
- * @param {Object} [options] - Search options
- * @param {number} [options.limit=10] - Results per keyword
- * @param {string} [options.source='crossref'] - Data source
- * @returns {Promise<Object>} Batch search results
- * 
- * @example
- * const results = await batchSearch(['AI', 'machine learning'], { limit: 5 });
  */
 export const batchSearch = async (keywords, options = {}) => {
   try {

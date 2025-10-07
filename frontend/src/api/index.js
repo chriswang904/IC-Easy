@@ -29,6 +29,7 @@ export {
   getPlagiarismStats,
 } from './plagiarism';
 
+
 /**
  * API Configuration
  * Export configuration values that might be needed
@@ -41,6 +42,23 @@ export const API_CONFIG = {
   FORMATS: ['apa', 'ieee', 'mla'],
   PLAGIARISM_METHODS: ['tfidf', 'semantic'],
 };
+
+// Export authentication functions
+export {
+  register,
+  login,
+  logout,
+  getCurrentUser,
+  getStoredUser,
+  isAuthenticated,
+} from './auth';
+
+// Export history functions
+export {
+  getSearchHistory,
+  getTrendingKeywords,
+  advancedSearch,
+} from './history';
 
 /**
  * API Error Handler

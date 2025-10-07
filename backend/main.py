@@ -12,7 +12,7 @@ Version: 1.0.0
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from api import literature, plagiarism, history
+from api import literature, plagiarism, history, auth
 import os
 import logging
 import sys
@@ -225,6 +225,9 @@ async def log_requests(request: Request, call_next):
 # ROUTE REGISTRATION
 
 # Include API routers
+logger.info("[Route Registration] Registering auth routes...")
+app.include_router(auth.router)
+
 logger.info("[Route Registration] Registering literature routes...")
 app.include_router(literature.router)
 

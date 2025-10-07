@@ -126,6 +126,63 @@ export const checkApiHealth = async () => {
 };
 
 /**
+ * Request interceptor - Add authentication token
+ */
+apiClient.interceptors.request.use(
+  (config) => {
+    // Add authentication token if available
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    
+    console.log(`[API Request] ${config.method.toUpperCase()} ${config.url}`, {
+      params: config.params,
+      hasAuth: !!token
+    });
+    
+    return config;
+  },
+  (error) => {
+    console.error('[API Request Error]', error);
+    return Promise.reject(error);
+  }
+);
+
+/**
+ * Response interceptor - Handle 401 unauthorized
+ */
+apiClient.interceptors.response.use(
+  (response) => {
+    console.log(`[API Response] ${response.config.url}`, {
+      status: response.status,
+      data: response.data,
+    });
+    return response;
+  },
+  (error) => {
+    // Handle authentication errors
+    if (error.response?.status === 401) {
+      console.error('[API] Unauthorized - clearing auth data');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('user');
+      // Optionally redirect to login
+      // window.location.href = '/login';
+    }
+    
+    if (error.response) {
+      console.error('[API Error Response]', {
+        status: error.response.status,
+        data: error.response.data,
+        url: error.config?.url,
+      });
+    }
+    
+    return Promise.reject(error);
+  }
+);
+
+/**
  * Get API information
  * Fetches detailed API information from the backend
  * 

@@ -1,6 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, Edit, Star, Archive, Globe, Sparkles } from "lucide-react";
+import { Menu, Edit, Archive, Globe, Sparkles, User } from "lucide-react";
 
 function Sidebar() {
   const navigate = useNavigate();
@@ -13,9 +13,10 @@ function Sidebar() {
 
   return (
     <nav
-      className="flex flex-col w-20 items-center gap-10 pt-11 pb-14 px-0 bg-gradient-to-b from-purple-100 to-pink-100"
+      className="fixed left-0 top-0 h-screen flex flex-col items-center w-20 pt-11 pb-6 bg-gradient-to-b from-purple-100 to-pink-100"
       aria-label="Main navigation"
     >
+
       <div className="flex flex-col items-center gap-1">
         <button
           onClick={() => navigate("/")}
@@ -35,7 +36,7 @@ function Sidebar() {
         </button>
       </div>
 
-      <div className="flex flex-col items-center gap-4 w-full">
+      <div className="flex flex-col items-center gap-4 w-full mt-8">
         {navigationItems.map((item, index) => (
           <button
             key={index}
@@ -49,6 +50,17 @@ function Sidebar() {
             <span className="text-xs text-gray-600">{item.label}</span>
           </button>
         ))}
+      </div>
+
+      <div className="mt-auto">
+        <button
+          onClick={() => navigate("/login")}
+          className="flex flex-col items-center gap-1 p-2 hover:bg-white/30 rounded-lg transition"
+          aria-label="Login"
+        >
+          <User className="w-6 h-6 text-gray-700" />
+          <span className="text-xs text-gray-600">Login</span>
+        </button>
       </div>
     </nav>
   );

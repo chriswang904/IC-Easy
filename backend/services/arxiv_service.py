@@ -14,24 +14,33 @@ class ArXivService:
     def __init__(self):
         self.session = requests.Session()
     
-    def search_literature(self, keyword: str, limit: int = 10) -> List[LiteratureItem]:
+    def search_literature(self, keyword: str, limit: int = 10, sort_by: str = "relevance") -> List[LiteratureItem]:
         """
         Search literature using arXiv API
         
         Args:
             keyword: Search query keyword
             limit: Maximum number of results
+            sort_by: Sorting method (relevance | year | citations)
             
         Returns:
             List of LiteratureItem objects
         """
         try:
+            # Map sorting to arXiv API accepted fields
+            if sort_by == "year":
+                sort_field = "lastUpdatedDate"
+            elif sort_by == "citations":  # arXiv doesn’t have citation data
+                sort_field = "relevance"
+            else:
+                sort_field = "relevance"
+            
             # Build query parameters
             params = {
                 'search_query': f'all:{keyword}',
                 'start': 0,
                 'max_results': limit,
-                'sortBy': 'relevance',
+                'sortBy': sort_field,
                 'sortOrder': 'descending'
             }
             
@@ -58,17 +67,9 @@ class ArXivService:
     def get_by_id(self, arxiv_id: str) -> Optional[LiteratureItem]:
         """
         Get specific paper by arXiv ID
-        
-        Args:
-            arxiv_id: arXiv identifier (e.g., '2103.00020' or 'cs.AI/0001001')
-            
-        Returns:
-            LiteratureItem object or None
         """
         try:
-            # Clean arXiv ID (remove version if present)
             clean_id = arxiv_id.split('v')[0]
-            
             params = {
                 'id_list': clean_id,
                 'max_results': 1
@@ -76,28 +77,17 @@ class ArXivService:
             
             response = self.session.get(self.BASE_URL, params=params, timeout=10)
             response.raise_for_status()
-            
             feed = feedparser.parse(response.content)
             
             if feed.entries:
                 return self._parse_arxiv_entry(feed.entries[0])
-            
             return None
-            
         except Exception as e:
             print(f"arXiv ID lookup error: {e}")
             return None
     
     def _parse_arxiv_entry(self, entry) -> LiteratureItem:
-        """
-        Parse arXiv feed entry to LiteratureItem schema
-        
-        Args:
-            entry: Feed entry from arXiv API
-            
-        Returns:
-            LiteratureItem object
-        """
+        """Parse arXiv feed entry to LiteratureItem schema"""
         # Extract authors
         authors = []
         if hasattr(entry, 'authors'):
@@ -106,7 +96,7 @@ class ArXivService:
         elif hasattr(entry, 'author'):
             authors.append(Author(name=entry.author))
         
-        # Extract arXiv ID from entry id
+        # Extract arXiv ID
         arxiv_id = entry.id.split('/abs/')[-1] if hasattr(entry, 'id') else None
         
         # Extract publication date
@@ -116,25 +106,23 @@ class ArXivService:
                 dt = datetime.strptime(entry.published, '%Y-%m-%dT%H:%M:%SZ')
                 published_date = dt.strftime('%Y-%m-%d')
             except:
-                published_date = entry.published[:10]  # Take first 10 chars (YYYY-MM-DD)
+                published_date = entry.published[:10]
         
-        # Extract abstract (clean HTML tags if present)
+        # Extract abstract
         abstract = None
         if hasattr(entry, 'summary'):
             abstract = entry.summary.strip()
-            # Remove newlines and extra spaces
             abstract = ' '.join(abstract.split())
-            abstract = html.unescape(abstract) 
+            abstract = html.unescape(abstract)
         
-        # Extract primary category (journal equivalent)
+        # Extract primary category
         journal = None
         if hasattr(entry, 'arxiv_primary_category'):
             journal = f"arXiv:{entry.arxiv_primary_category.get('term', 'Unknown')}"
         elif hasattr(entry, 'tags'):
-            # Fallback to first tag
             journal = f"arXiv:{entry.tags[0].term}" if entry.tags else "arXiv"
         
-        # Extract DOI (most arXiv preprints don't have DOI until formally published)
+        # Extract DOI if available
         doi = None
         if hasattr(entry, 'arxiv_doi'):
             doi = entry.arxiv_doi
@@ -142,15 +130,14 @@ class ArXivService:
             for link in entry.links:
                 href = link.get('href', '')
                 if 'doi.org' in href:
-                    # Extract DOI from URL
                     doi = href.replace('https://doi.org/', '').replace('http://doi.org/', '')
                     break
 
         return LiteratureItem(
-            title = entry.title.replace("\n", " ").strip()[:500] if hasattr(entry, 'title') else 'Untitled',
+            title=entry.title.replace("\n", " ").strip()[:500] if hasattr(entry, 'title') else 'Untitled',
             authors=authors if authors else [Author(name="Unknown Author")],
             abstract=abstract,
-            doi = doi,
+            doi=doi,
             url=entry.id if hasattr(entry, 'id') else None,
             published_date=published_date,
             journal=journal,
