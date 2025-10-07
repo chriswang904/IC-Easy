@@ -180,3 +180,8 @@ coverage/
 
 # Other
 *.tsbuildinfo
+
+venv/
+env/
+ENV/
+.venv/

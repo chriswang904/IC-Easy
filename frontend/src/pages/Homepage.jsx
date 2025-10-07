@@ -25,19 +25,19 @@ export default function Homepage() {
   const [sortBy, setSortBy] = useState("relevance");
   const [source, setSource] = useState("all");
 
-  
   // API state management
   const [papers, setPapers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [searchHistory, setSearchHistory] = useState([]);
+  const [showSearchHistory, setShowSearchHistory] = useState(false);
 
   useEffect(() => {
     if (searchPerformed) {
       handleSearch();
     }
   }, [sortBy, source]);
-
 
   const navigationItems = [
     { icon: Star, label: "Starred" },
@@ -55,7 +55,6 @@ export default function Homepage() {
       title: "Attention Is All You Need",
       category: "Machine Learning",
       metadata: "45,231 citations • Added 2 days ago",
-      progress: 65,
       description:
         "Transformer architecture paper introducing self-attention mechanisms. Key findings on sequence-to-sequence models and applications in NLP tasks.",
       color: "bg-blue-50",
@@ -66,7 +65,6 @@ export default function Homepage() {
       title: "Climate Change Impact on Ecosystems",
       category: "Environmental Science",
       metadata: "Open Access • Added 1 week ago",
-      progress: 20,
       description:
         "Comprehensive study analyzing biodiversity loss patterns and ecosystem adaptation strategies under various climate scenarios through 2050.",
       color: "bg-green-50",
@@ -75,7 +73,6 @@ export default function Homepage() {
       id: "3",
       image: "/images/note3.jpg",
       title: "CRISPR Gene Editing Applications",
-      progress: 5,
       category: "Biotechnology",
       metadata: "Peer-reviewed • Added 3 weeks ago",
       description:
@@ -89,58 +86,74 @@ export default function Homepage() {
    */
   const handleSearch = async (e) => {
     e?.preventDefault();
-    
+
     if (!searchQuery.trim()) {
       return;
     }
 
+    // Add to search history (keep last 10)
+    setSearchHistory((prev) => {
+      const newHistory = [
+        searchQuery,
+        ...prev.filter((q) => q !== searchQuery),
+      ];
+      return newHistory.slice(0, 10);
+    });
+
     setLoading(true);
     setError(null);
     setSearchPerformed(true);
+    setShowSearchHistory(false);
 
     try {
-      console.log('[Homepage] Searching for:', searchQuery);
-      console.log('[Homepage] Search params:', { keyword: searchQuery, limit: 10, source, sort_by: sortBy });
-      
+      console.log("[Homepage] Searching for:", searchQuery);
+      console.log("[Homepage] Search params:", {
+        keyword: searchQuery,
+        limit: 10,
+        source,
+        sort_by: sortBy,
+      });
+
       const result = await searchLiterature({
         keyword: searchQuery,
         limit: 10,
         source,
         sort_by: sortBy,
-        filters: null
+        filters: null,
       });
 
-      console.log('[Homepage] Search results:', result);
-      console.log('[Homepage] Number of results:', result.results?.length || 0);
-    
+      console.log("[Homepage] Search results:", result);
+      console.log("[Homepage] Number of results:", result.results?.length || 0);
+
       // Log first result structure if available
       if (result.results && result.results.length > 0) {
-        console.log('[Homepage] First result structure:', result.results[0]);
+        console.log("[Homepage] First result structure:", result.results[0]);
       }
 
       // Transform API results to match component format
       const transformedPapers = (result.results || []).map((paper, index) => {
         // Extract year from published_date
-        let year = 'N/A';
+        let year = "N/A";
         if (paper.published_date) {
           const match = paper.published_date.match(/^(\d{4})/);
-          year = match ? match[1] : 'N/A';
+          year = match ? match[1] : "N/A";
         }
 
         // Get author names from authors array
-        const authorNames = paper.authors 
-          ? paper.authors.map(a => a.name || a).filter(Boolean)
+        const authorNames = paper.authors
+          ? paper.authors.map((a) => a.name || a).filter(Boolean)
           : [];
 
         return {
           id: paper.doi || paper.url || `paper-${index}`,
           image: "/images/note1.jpg", // Default image
-          title: paper.title || 'Untitled',
-          category: paper.journal || paper.source || 'Research Paper',
+          title: paper.title || "Untitled",
+          category: paper.journal || paper.source || "Research Paper",
           metadata: `${paper.citation_count || 0} citations • ${year}`,
-          progress: 0,
-          description: paper.abstract || 'No abstract available.',
-          color: `bg-${['blue', 'green', 'purple', 'pink', 'yellow'][index % 5]}-50`,
+          description: paper.abstract || "No abstract available.",
+          color: `bg-${
+            ["blue", "green", "purple", "pink", "yellow"][index % 5]
+          }-50`,
           authors: authorNames,
           doi: paper.doi,
           url: paper.url,
@@ -150,20 +163,19 @@ export default function Homepage() {
       setPapers(transformedPapers);
 
       if (transformedPapers.length === 0) {
-        setError('No results found. Try different keywords.');
+        setError("No results found. Try different keywords.");
       }
-
     } catch (err) {
-      console.error('[Homepage] Search error:', err);
-      let errorMessage = 'An error occurred while searching';
-    
+      console.error("[Homepage] Search error:", err);
+      let errorMessage = "An error occurred while searching";
+
       if (err.response?.data?.detail) {
         errorMessage = err.response.data.detail;
       } else if (err.message) {
         errorMessage = err.message;
       }
-      
-      setError(errorMessage); 
+
+      setError(errorMessage);
       setPapers([]);
     } finally {
       setLoading(false);
@@ -176,7 +188,7 @@ export default function Homepage() {
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
     // Reset to default papers when search is cleared
-    if (e.target.value === '' && searchPerformed) {
+    if (e.target.value === "" && searchPerformed) {
       setPapers([]);
       setSearchPerformed(false);
       setError(null);
@@ -187,11 +199,23 @@ export default function Homepage() {
    * Handle paper click
    */
   const handlePaperClick = (paper) => {
-    console.log('[Homepage] Paper clicked:', paper);
+    console.log("[Homepage] Paper clicked:", paper);
     // Navigate to paper detail page or open URL
     if (paper.url) {
-      window.open(paper.url, '_blank');
+      window.open(paper.url, "_blank");
     }
+  };
+
+  /**
+   * Handle clicking on a search history item
+   */
+  const handleHistoryClick = (query) => {
+    setSearchQuery(query);
+    setShowSearchHistory(false);
+    // Trigger search with the selected query
+    setTimeout(() => {
+      document.querySelector('button[type="submit"]').click();
+    }, 0);
   };
 
   /**
@@ -200,50 +224,96 @@ export default function Homepage() {
   const displayPapers = searchPerformed ? papers : defaultPapers;
 
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen overflow-hidden border-8 border-purple-200">
+    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
       <div className="flex">
         {/* Left Sidebar */}
         <Sidebar />
-        
+
         {/* Main Content */}
-        <div className="flex-1 p-6 ml-20">
+        <div className="flex-1 p-6" style={{ marginLeft: "5vw" }}>
           <article className="bg-white rounded-t-3xl shadow-xl p-6 max-w-6xl">
             {/* Search Bar */}
-            <form onSubmit={handleSearch} className="mb-6 bg-purple-50 rounded-3xl p-1 flex items-center max-w-2xl">
-              <button
-                type="button"
-                className="p-3 hover:bg-white/50 rounded-full"
-                aria-label="Menu"
+            <div className="relative">
+              <form
+                onSubmit={handleSearch}
+                className="mb-6 bg-purple-50 rounded-3xl p-1 flex items-center max-w-2xl"
               >
-                <Menu className="w-6 h-6 text-gray-600" />
-              </button>
-              <input
-                type="search"
-                placeholder="Search papers, topics, or authors..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                className="flex-1 bg-transparent px-4 py-2 outline-none text-gray-700"
-                aria-label="Search"
-                disabled={loading}
-              />
-              <button
-                type="submit"
-                className="p-3 hover:bg-white/50 rounded-full disabled:opacity-50"
-                aria-label="Search"
-                disabled={loading}
-              >
-                {loading ? (
-                  <Loader className="w-6 h-6 text-gray-600 animate-spin" />
-                ) : (
-                  <Search className="w-6 h-6 text-gray-600" />
-                )}
-              </button>
-            </form>
+                <button
+                  type="button"
+                  onClick={() => setShowSearchHistory(!showSearchHistory)}
+                  className="p-3 hover:bg-white/50 rounded-full"
+                  aria-label="Recent"
+                >
+                  <Clock className="w-6 h-6 text-gray-600" />
+                </button>
+                <input
+                  type="search"
+                  placeholder="Search papers, topics, or authors..."
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onFocus={() =>
+                    searchHistory.length > 0 && setShowSearchHistory(true)
+                  }
+                  className="flex-1 bg-transparent px-4 py-2 outline-none text-gray-700"
+                  aria-label="Search"
+                  disabled={loading}
+                />
+                <button
+                  type="submit"
+                  className="p-3 hover:bg-white/50 rounded-full disabled:opacity-50"
+                  aria-label="Search"
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <Loader className="w-6 h-6 text-gray-600 animate-spin" />
+                  ) : (
+                    <Search className="w-6 h-6 text-gray-600" />
+                  )}
+                </button>
+              </form>
+
+              {/* Search History Dropdown */}
+              {showSearchHistory && searchHistory.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-lg border border-gray-200 max-w-2xl z-10">
+                  <div className="p-3 border-b border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold text-gray-700">
+                        Recent Searches
+                      </h3>
+                      <button
+                        onClick={() => {
+                          setSearchHistory([]);
+                          setShowSearchHistory(false);
+                        }}
+                        className="text-xs text-purple-600 hover:text-purple-700"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+                  <ul className="max-h-64 overflow-y-auto">
+                    {searchHistory.map((query, index) => (
+                      <li key={index}>
+                        <button
+                          onClick={() => handleHistoryClick(query)}
+                          className="w-full text-left px-4 py-3 hover:bg-purple-50 flex items-center gap-3 transition"
+                        >
+                          <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                          <span className="text-gray-700 flex-1">{query}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
 
             {searchPerformed && (
               <div className="mb-4 flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Sort by:</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    Sort by:
+                  </label>
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
@@ -256,7 +326,9 @@ export default function Homepage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-gray-700">Source:</label>
+                  <label className="text-sm font-medium text-gray-700">
+                    Source:
+                  </label>
                   <select
                     value={source}
                     onChange={(e) => setSource(e.target.value)}
@@ -271,91 +343,64 @@ export default function Homepage() {
               </div>
             )}
 
-
-
             {/* Error Message */}
-            
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
                 <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                 <div>
                   <p className="text-red-700 font-medium">Search Error</p>
                   <p className="text-red-600 text-sm">
-                    {typeof error === 'string' ? error : error.message || 'An error occurred'}
+                    {typeof error === "string"
+                      ? error
+                      : error.message || "An error occurred"}
                   </p>
                 </div>
               </div>
             )}
 
-            {/* Hero Section */}
-            <section className="relative h-64 rounded-3xl overflow-hidden mb-6 shadow-lg">
-              {/* Background gradient */}
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700" />
+            {/* Hero Section - Only show when no search has been performed */}
+            {!searchPerformed && (
+              <section className="relative h-64 rounded-3xl overflow-hidden mb-6 shadow-lg">
+                {/* Background gradient */}
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700" />
 
-              {/* Background image */}
-              <div className="absolute inset-0 bg-black/20">
-                <img
-                  src="images/mainPage.jpg"
-                  alt="Research background"
-                  className="w-full h-full object-cover mix-blend-overlay"
-                />
-              </div>
-
-              {/* Content */}
-              <div className="relative h-full flex flex-col justify-end p-6 bg-gradient-to-t from-black/60 to-transparent">
-                <h1 className="text-4xl font-bold text-white mb-2">
-                  Discover Your Next Academic Journey
-                </h1>
-                <p className="text-purple-100 mb-6">
-                  AI-powered research assistant for smarter paper discovery and
-                  writing
-                </p>
-
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => document.querySelector('input[type="search"]').focus()}
-                    className="bg-white text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition flex items-center gap-2 shadow-lg"
-                  >
-                    <Zap size={18} />
-                    Get Started
-                  </button>
-                  <button className="bg-white/90 text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-white transition flex items-center gap-2 shadow-lg">
-                    <BookOpen size={18} />
-                    Browse 10M+ Papers
-                  </button>
+                {/* Background image */}
+                <div className="absolute inset-0 bg-black/20">
+                  <img
+                    src="images/mainPage.jpg"
+                    alt="Research background"
+                    className="w-full h-full object-cover mix-blend-overlay"
+                  />
                 </div>
-              </div>
-            </section>
 
-            {/* Tabs */}
-            <div className="flex justify-center items-center gap-4">
-              <button
-                onClick={() => setActiveTab("notes")}
-                className={`px-6 py-2.5 font-semibold transition flex items-center justify-center gap-2 w-[125.5px] h-10 rounded-full ${
-                  activeTab === "notes"
-                    ? "bg-purple-600 text-white"
-                    : "bg-purple-100 text-purple-900 hover:bg-purple-200"
-                }`}
-                role="tab"
-                aria-selected={activeTab === "notes"}
-              >
-                {activeTab === "notes" && <Check size={18} />}
-                Notes
-              </button>
-              <button
-                onClick={() => setActiveTab("essay")}
-                className={`px-6 py-2.5 font-semibold transition flex items-center justify-center w-[125.5px] h-10 rounded-full ${
-                  activeTab === "essay"
-                    ? "bg-purple-600 text-white"
-                    : "bg-purple-100 text-purple-900 hover:bg-purple-200"
-                }`}
-                role="tab"
-                aria-selected={activeTab === "essay"}
-              >
-                {activeTab === "essay" && <Check size={18} />}
-                Essay
-              </button>
-            </div>
+                {/* Content */}
+                <div className="relative h-full flex flex-col justify-end p-6 bg-gradient-to-t from-black/60 to-transparent">
+                  <h1 className="text-4xl font-bold text-white mb-2">
+                    Discover Your Next Academic Journey
+                  </h1>
+                  <p className="text-purple-100 mb-6">
+                    AI-powered research assistant for smarter paper discovery
+                    and writing
+                  </p>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() =>
+                        document.querySelector('input[type="search"]').focus()
+                      }
+                      className="bg-white text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition flex items-center gap-2 shadow-lg"
+                    >
+                      <Zap size={18} />
+                      Get Started
+                    </button>
+                    <button className="bg-white/90 text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-white transition flex items-center gap-2 shadow-lg">
+                      <BookOpen size={18} />
+                      Browse 10M+ Papers
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
 
             {/* Loading State */}
             {loading && (
@@ -377,7 +422,9 @@ export default function Homepage() {
                 {displayPapers.length === 0 && !error && searchPerformed && (
                   <div className="text-center py-12">
                     <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600">No papers found. Try a different search.</p>
+                    <p className="text-gray-600">
+                      No papers found. Try a different search.
+                    </p>
                   </div>
                 )}
 
@@ -394,7 +441,7 @@ export default function Homepage() {
                         alt={paper.title}
                         className="w-full h-full object-cover rounded-2xl"
                         onError={(e) => {
-                          e.target.src = '/images/note1.jpg'; // Fallback image
+                          e.target.src = "/images/note1.jpg"; // Fallback image
                         }}
                       />
                     </div>
@@ -412,8 +459,9 @@ export default function Homepage() {
                       </p>
                       {paper.authors && paper.authors.length > 0 && (
                         <p className="text-xs text-gray-500 mb-1">
-                          {paper.authors.slice(0, 3).join(', ')}
-                          {paper.authors.length > 3 && ` +${paper.authors.length - 3} more`}
+                          {paper.authors.slice(0, 3).join(", ")}
+                          {paper.authors.length > 3 &&
+                            ` +${paper.authors.length - 3} more`}
                         </p>
                       )}
                       <p className="text-sm text-gray-600 line-clamp-2">
@@ -422,35 +470,13 @@ export default function Homepage() {
                     </div>
 
                     {/* Action Icon */}
-                    <button 
+                    <button
                       className="p-2 hover:bg-purple-100 rounded-full transition"
                       onClick={(e) => {
                         e.stopPropagation();
                         // Add to favorites or other action
                       }}
-                    >
-                      <svg className="w-7 h-7 transform -rotate-90">
-                        <circle
-                          cx="14"
-                          cy="14"
-                          r="12"
-                          stroke="#E9D5FF"
-                          strokeWidth="2"
-                          fill="none"
-                        />
-                        <circle
-                          cx="14"
-                          cy="14"
-                          r="12"
-                          stroke="#9333EA"
-                          strokeWidth="2"
-                          fill="none"
-                          strokeDasharray="75.4"
-                          strokeDashoffset={75.4 - (75.4 * paper.progress) / 100}
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </button>
+                    ></button>
                   </article>
                 ))}
               </section>

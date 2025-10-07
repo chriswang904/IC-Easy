@@ -5,6 +5,7 @@ import MenuSection from "../components/MenuSection";
 
 function CollectionsPage() {
   const [activeTab, setActiveTab] = useState("all");
+  const [activeMenuItem, setActiveMenuItem] = useState("Recent"); // Track menu selection
 
   const contentTabs = [
     { id: "all", label: "All" },
@@ -85,40 +86,30 @@ function CollectionsPage() {
 
   return (
     <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen overflow-hidden border-8 border-purple-200">
-      <div className="flex min-h-screen bg-[#fef7ff]">
+      <div className="flex min-h-screen">
         {/* Shared Sidebar */}
         <Sidebar />
-        <div className="flex-1 p-6 ml-20">
-          <article className="flex bg-white rounded-t-3xl shadow-xl p-6 max-w-6xl mx-auto">
-            {/* Menu Section */}
-            <MenuSection />
 
-            {/* Main Content Area */}
-            <div className="flex-1 flex flex-col ml-6">
-              {/* Header */}
+        {/* Main Content Area */}
+        <div className="flex-1 p-6" style={{ marginLeft: "5vw" }}>
+          {/* White background container with flex layout */}
+          <div className="flex bg-white rounded-t-3xl shadow-xl max-w-6xl overflow-hidden">
+            {/* Menu Section - Left side */}
+            <div className="w-64 flex-shrink-0">
+              <MenuSection
+                activeItem={activeMenuItem}
+                onItemChange={setActiveMenuItem}
+              />
+            </div>
+
+            {/* Main Content - Right side */}
+            <div className="flex-1 flex flex-col">
+              {/* Header with Title */}
               <header className="bg-white border-b border-gray-200 px-6 py-4">
-                <div className="flex justify-center">
-                  <nav
-                    className="flex items-center gap-2 bg-[#f3edf7] rounded-full p-2 w-fit"
-                    role="tablist"
-                  >
-                    {contentTabs.map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        role="tab"
-                        aria-selected={activeTab === tab.id}
-                        className={`px-6 py-2 rounded-full font-medium transition ${
-                          activeTab === tab.id
-                            ? "bg-[#e8def8] text-[#1d1b20] font-semibold"
-                            : "text-[#49454f] hover:bg-white/50"
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </nav>
-                </div>
+                {/* Title from Menu Selection */}
+                <h1 className="text-3xl px-4 py-8 font-bold text-gray-900 mb-0 ">
+                  {activeMenuItem}
+                </h1>
               </header>
 
               {/* Items List */}
@@ -167,7 +158,7 @@ function CollectionsPage() {
                 )}
               </main>
             </div>
-          </article>
+          </div>
         </div>
       </div>
     </main>

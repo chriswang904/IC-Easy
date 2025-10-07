@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
-function MenuSection() {
-  const [activeItem, setActiveItem] = useState(10);
+function MenuSection({ activeItem: activeItemLabel, onItemChange }) {
+  const [searchQuery, setSearchQuery] = useState("");
 
   const menuItems = [
     { id: 1, label: "All Items" },
@@ -18,49 +18,97 @@ function MenuSection() {
     { id: 12, label: "Settings" },
   ];
 
+  const handleItemClick = (item) => {
+    if (onItemChange) {
+      onItemChange(item.label);
+    }
+  };
+
+  const filteredItems = menuItems.filter((item) =>
+    item.label.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <nav
-      className="flex max-w-[300px] w-[300px] h-screen items-start px-0 py-2 bg-[#f5eff7]"
+      className="flex flex-col w-full h-full bg-[#ffffff]"
       role="navigation"
       aria-label="Main menu"
     >
-      <ul className="flex flex-col items-start relative flex-1 overflow-y-auto scrollbar-hide">
-        {menuItems.map((item) => (
-          <li
-            key={item.id}
-            className="flex flex-col items-start relative self-stretch w-full flex-[0_0_auto]"
+      {/* Search Bar - Sticky positioning keeps it at top while scrolling */}
+      <div className="sticky top-0 z-10 px-8 py-12 bg-[#ffffff] ">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search menu..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-4 py-2 pr-10 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#e8def8] focus:border-transparent"
+            aria-label="Search menu items"
+          />
+          <svg
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
           >
-            <button
-              onClick={() => setActiveItem(item.id)}
-              className={`flex h-14 items-center gap-3 px-3 py-2 relative self-stretch w-full ${
-                item.id === activeItem ? "bg-[#e8def8]" : ""
-              }`}
-              type="button"
-              aria-current={item.id === activeItem ? "page" : undefined}
-            >
-              <span className="items-start flex-1 grow flex flex-col relative">
-                <span
-                  className={`${
-                    item.id === activeItem
-                      ? "flex items-center justify-center"
-                      : "self-stretch"
-                  } mt-[-1.00px] [font-family:'Roboto-Regular',Helvetica] font-normal ${
-                    item.id === activeItem ? "text-[#4a4459]" : "text-[#1d1b20]"
-                  } text-base leading-6 relative ${
-                    item.id === activeItem
-                      ? "self-stretch"
-                      : "flex items-center justify-center"
-                  } tracking-[0.50px]`}
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+        </div>
+      </div>
+
+      {/* Menu Items - Takes remaining space and allows scrolling */}
+      <div className="flex w-full flex-1 px-4 py-2 items-start overflow-hidden relative">
+        <ul className="flex flex-col items-start w-full overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden py-2">
+          {filteredItems.length > 0 ? (
+            filteredItems.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-col items-start relative self-stretch w-full flex-[0_0_auto]"
+              >
+                <button
+                  onClick={() => handleItemClick(item)}
+                  className={`flex h-14 items-center gap-3 px-3 py-2 relative self-stretch w-full ${
+                    item.label === activeItemLabel ? "bg-[#e8def8]" : ""
+                  }`}
+                  type="button"
+                  aria-current={
+                    item.label === activeItemLabel ? "page" : undefined
+                  }
                 >
-                  {item.label}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="relative self-stretch w-3" aria-hidden="true">
-        <div className="absolute h-[calc(100%_-_122px)] top-0 right-1 w-1 bg-[#79747e] rounded-[100px]" />
+                  <span className="items-start flex-1 grow flex flex-col relative">
+                    <span
+                      className={`${
+                        item.label === activeItemLabel
+                          ? "flex items-center justify-center"
+                          : "self-stretch"
+                      } mt-[-1.00px] [font-family:'Roboto-Regular',Helvetica] font-normal ${
+                        item.label === activeItemLabel
+                          ? "text-[#4a4459]"
+                          : "text-[#1d1b20]"
+                      } text-base leading-6 relative ${
+                        item.label === activeItemLabel
+                          ? "self-stretch"
+                          : "flex items-center justify-center"
+                      } tracking-[0.50px]`}
+                    >
+                      {item.label}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="flex items-center justify-center w-full py-8 text-gray-500 text-sm">
+              No items found
+            </li>
+          )}
+        </ul>
       </div>
     </nav>
   );

@@ -89,10 +89,11 @@ function RecentPage() {
         {/* Shared Sidebar */}
         <Sidebar />
         {/* Menu Section */}
-        <MenuSection />
+        {/* <MenuSection /> */}
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 p-6" style={{ marginLeft: "0vw" }}>
+          <MenuSection />
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4">
             <div className="max-w-6xl mx-auto">
