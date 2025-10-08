@@ -32,6 +32,8 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Create JWT token"""
     to_encode = data.copy()
+    if "sub" in to_encode:
+        to_encode["sub"] = str(to_encode["sub"])
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -48,15 +50,30 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")  
+        
+        print(f"[DEBUG] Token payload: {payload}")
+        print(f"[DEBUG] User ID from token: {user_id_str}, type: {type(user_id_str)}")
+        
+        if user_id_str is None:
             raise credentials_exception
-    except JWTError:
+        
+        user_id = int(user_id_str)
+        
+    except JWTError as e:
+        print(f"[DEBUG] JWT Error: {e}")
+        raise credentials_exception
+    except ValueError as e:
+        print(f"[DEBUG] Value Error: {e}")
         raise credentials_exception
     
     user = db.query(User).filter(User.id == user_id).first()
+    
+    print(f"[DEBUG] User query - ID: {user_id}, Found: {user.username if user else None}")
+    
     if user is None:
         raise credentials_exception
+    
     return user
 
 # Guest Service
@@ -66,11 +83,14 @@ def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_str = payload.get("sub")
+        
+        if user_id_str is None:
             return None
+        
+        user_id = int(user_id_str)
             
         user = db.query(User).filter(User.id == user_id).first()
         return user
-    except JWTError:
+    except (JWTError, ValueError):
         return None

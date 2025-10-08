@@ -1,169 +1,100 @@
-/**
- * Plagiarism Detection API Module
- *
- * This module provides functions to interact with the plagiarism detection
- * endpoints of the backend API.
- *
- * @module api/plagiarism
- */
+// api/plagiarism.js 
 
 import apiClient from "./client";
 
 /**
- * Check text for plagiarism
- *
- * @param {Object} params - Plagiarism check parameters
- * @param {string} params.text - Text to check for plagiarism
- * @param {Array<string>} params.reference_texts - Reference texts to compare against
- * @param {string} [params.method='tfidf'] - Detection method (tfidf|semantic)
- * @param {number} [params.threshold=0.7] - Similarity threshold (0-1)
- * @returns {Promise<Object>} Plagiarism check results
- *
- * @example
- * const result = await checkPlagiarism({
- *   text: 'This is my essay text...',
- *   reference_texts: [
- *     'Reference document 1...',
- *     'Reference document 2...'
- *   ],
- *   method: 'tfidf',
- *   threshold: 0.7
- * });
+ * Check text plagiarism and AI detection (NO reference texts needed)
+ * Uses Longformer model for plagiarism + ensemble AI detector
+ * 
+ * @param {Object} params
+ * @param {string} params.text - Text to check
+ * @param {boolean} [params.check_ai=true] - Include AI detection
+ * @returns {Promise<Object>} Check results
  */
-export const checkPlagiarism = async ({
-  text,
-  reference_texts,
-  method = "tfidf",
-  threshold = 0.7,
-}) => {
+export const checkTextPlagiarism = async ({ text, check_ai = true }) => {
   try {
-    const response = await apiClient.post("/api/plagiarism/check", {
-      user_text: text,
-      reference_texts,
-      method,
-      threshold,
+    const response = await apiClient.post("/api/plagiarism/check-text", {
+      text,
+      check_ai,
     });
     return response.data;
   } catch (error) {
-    console.error("[Check Plagiarism] Error:", error);
+    console.error("[Check Text Plagiarism] Error:", error);
     throw error;
   }
 };
 
 /**
- * Compare two texts for similarity
- *
- * @param {Object} params - Comparison parameters
- * @param {string} params.text1 - First text
- * @param {string} params.text2 - Second text
- * @param {string} [params.method='tfidf'] - Comparison method (tfidf|semantic)
- * @returns {Promise<Object>} Similarity score and details
- *
- * @example
- * const similarity = await compareTexts({
- *   text1: 'First document...',
- *   text2: 'Second document...',
- *   method: 'semantic'
- * });
+ * Check file plagiarism and AI detection
+ * Supports .txt, .docx, .pdf files
+ * 
+ * @param {File} file - File to check
+ * @param {boolean} [check_ai=true] - Include AI detection
+ * @returns {Promise<Object>} Check results
  */
-export const compareTexts = async ({ text1, text2, method = "tfidf" }) => {
+export const checkFilePlagiarism = async (file, check_ai = true) => {
   try {
-    // Use plagiarism check with single reference
-    const response = await checkPlagiarism({
-      text: text1,
-      reference_texts: [text2],
-      method,
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("check_ai", check_ai);
+
+    const response = await apiClient.post("/api/plagiarism/check-file", formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+      params: {
+        check_ai: check_ai
+      }
     });
-
-    return {
-      similarity_score: response.similarity_scores?.[0] || 0,
-      method: response.method,
-      details: response,
-    };
+    
+    return response.data;
   } catch (error) {
-    console.error("[Compare Texts] Error:", error);
+    console.error("[Check File Plagiarism] Error:", error);
     throw error;
   }
 };
 
 /**
- * Batch plagiarism check - Check multiple texts
- *
- * @param {Array<Object>} checkRequests - Array of check request objects
- * @returns {Promise<Object>} Batch check results
- *
- * @example
- * const results = await batchCheckPlagiarism([
- *   {
- *     text: 'Essay 1...',
- *     reference_texts: ['Reference 1...'],
- *     method: 'tfidf'
- *   },
- *   {
- *     text: 'Essay 2...',
- *     reference_texts: ['Reference 2...'],
- *     method: 'semantic'
- *   }
- * ]);
+ * Extract text from file (client-side - for preview only)
+ * Backend handles actual extraction
  */
+export const extractTextFromFile = async (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      resolve(e.target.result);
+    };
+    
+    reader.onerror = (error) => {
+      reject(error);
+    };
+    
+    // Only for preview - backend does real extraction
+    if (file.type === "text/plain") {
+      reader.readAsText(file);
+    } else {
+      // For DOCX/PDF, just resolve with filename
+      resolve(`[File: ${file.name}]`);
+    }
+  });
+};
+
+// Legacy compatibility exports (not used with new backend)
+export const checkPlagiarism = checkTextPlagiarism;
+export const compareTexts = async ({ text1, text2, method = "tfidf" }) => {
+  console.warn("[API] compareTexts not supported by new backend");
+  return { error: "Not supported" };
+};
 export const batchCheckPlagiarism = async (checkRequests) => {
-  try {
-    // Execute all checks in parallel
-    const promises = checkRequests.map((request) => checkPlagiarism(request));
-
-    const results = await Promise.allSettled(promises);
-
-    // Process results
-    const batchResults = results.map((result, index) => ({
-      index,
-      status: result.status,
-      data: result.status === "fulfilled" ? result.value : null,
-      error: result.status === "rejected" ? result.reason : null,
-    }));
-
-    return {
-      success: true,
-      total: checkRequests.length,
-      results: batchResults,
-    };
-  } catch (error) {
-    console.error("[Batch Check Plagiarism] Error:", error);
-    throw error;
-  }
+  console.warn("[API] batchCheckPlagiarism not supported by new backend");
+  return { error: "Not supported" };
 };
-
-/**
- * Get plagiarism statistics from check result
- *
- * @param {Object} checkResult - Result from checkPlagiarism
- * @returns {Object} Statistical summary
- *
- * @example
- * const result = await checkPlagiarism({...});
- * const stats = getPlagiarismStats(result);
- */
 export const getPlagiarismStats = (checkResult) => {
-  if (!checkResult || !checkResult.similarity_scores) {
-    return {
-      average_similarity: 0,
-      max_similarity: 0,
-      min_similarity: 0,
-      is_plagiarized: false,
-    };
-  }
-
-  const scores = checkResult.similarity_scores;
-  const average = scores.reduce((sum, score) => sum + score, 0) / scores.length;
-  const max = Math.max(...scores);
-  const min = Math.min(...scores);
-
   return {
-    average_similarity: average,
-    max_similarity: max,
-    min_similarity: min,
-    is_plagiarized: checkResult.is_plagiarized,
-    total_references: scores.length,
-    method: checkResult.method,
-    threshold: checkResult.threshold,
+    plagiarism_probability: checkResult.plagiarism_probability || 0,
+    risk_level: checkResult.plagiarism_risk || "low",
+    ai_probability: checkResult.ai_probability || 0,
+    is_ai_generated: checkResult.is_ai_generated || false,
   };
 };

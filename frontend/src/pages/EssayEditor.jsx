@@ -3,25 +3,17 @@ import {
   ArrowLeft,
   Plus,
   FolderOpen,
-  Home,
   FileText,
-  Settings,
-  HelpCircle,
   LogIn,
   LogOut,
   ExternalLink,
   Trash2,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-
-// Google API Configuration
-const CLIENT_ID =
-  process.env.REACT_APP_GOOGLE_CLIENT_ID ||
-  "YOUR_CLIENT_ID.apps.googleusercontent.com";
-const API_KEY = process.env.REACT_APP_GOOGLE_API_KEY || "YOUR_API_KEY";
-const SCOPES =
-  "https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/drive.file";
+import { getStoredUser } from "../api/auth";
 
 function EssayEditor() {
   const navigate = useNavigate();
@@ -29,73 +21,46 @@ function EssayEditor() {
   const [documentId, setDocumentId] = useState(null);
   const [gapiReady, setGapiReady] = useState(false);
   const [accessToken, setAccessToken] = useState(null);
-  const [tokenClient, setTokenClient] = useState(null);
   const [recentDocs, setRecentDocs] = useState([]);
   const [documentTitle, setDocumentTitle] = useState("New Document");
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [error, setError] = useState(null);
+  const [tokenExpired, setTokenExpired] = useState(false);
 
-  // Initialize Google Identity Services
+  // Validate users logged in via google
   useEffect(() => {
-    console.log("Starting Google API initialization...");
+    const user = getStoredUser();
+    
+    if (user && user.google_access_token) {
+      console.log('[Google Docs] User has Google token, auto-signing in');
+      setAccessToken(user.google_access_token);
+      setIsSignedIn(true);
+    }
+  }, []);
 
+  // Initialize Google API
+  useEffect(() => {
     const initGapi = () => {
       window.gapi.load("client", async () => {
         try {
-          // Initialize without discoveryDocs first
           await window.gapi.client.init({
-            apiKey: API_KEY,
+            apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
           });
 
-          console.log("GAPI client initialized with API key");
+          await window.gapi.client.load(
+            "https://docs.googleapis.com/$discovery/rest?version=v1"
+          );
+          await window.gapi.client.load(
+            "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"
+          );
 
-          // Load APIs one by one with error handling
-          try {
-            await window.gapi.client.load(
-              "https://docs.googleapis.com/$discovery/rest?version=v1"
-            );
-            console.log("Docs API loaded");
-          } catch (error) {
-            console.error("Error loading Docs API:", error);
-          }
-
-          try {
-            await window.gapi.client.load(
-              "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"
-            );
-            console.log("Drive API loaded");
-          } catch (error) {
-            console.error("Error loading Drive API:", error);
-          }
-
-          console.log("GAPI client fully initialized");
+          console.log("[Google Docs] GAPI client initialized");
           setGapiReady(true);
         } catch (error) {
-          console.error("Error initializing GAPI client:", error);
-          console.error("Error details:", JSON.stringify(error, null, 2));
-          setGapiReady(true); // Set to true anyway to allow sign-in attempt
+          console.error("[Google Docs] Error initializing GAPI:", error);
+          setError("Failed to initialize Google API");
         }
       });
-    };
-
-    const initGIS = () => {
-      if (window.google) {
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: CLIENT_ID,
-          scope: SCOPES,
-          callback: (response) => {
-            if (response.error) {
-              console.error("Token error:", response);
-              alert(`Authentication failed: ${response.error}`);
-              return;
-            }
-            console.log("Access token received");
-            setAccessToken(response.access_token);
-            setIsSignedIn(true);
-          },
-        });
-        setTokenClient(client);
-        console.log("GIS initialized");
-      }
     };
 
     const gapiScript = document.createElement("script");
@@ -103,21 +68,14 @@ function EssayEditor() {
     gapiScript.onload = initGapi;
     document.body.appendChild(gapiScript);
 
-    const gisScript = document.createElement("script");
-    gisScript.src = "https://accounts.google.com/gsi/client";
-    gisScript.onload = initGIS;
-    document.body.appendChild(gisScript);
-
     return () => {
       if (document.body.contains(gapiScript)) {
         document.body.removeChild(gapiScript);
       }
-      if (document.body.contains(gisScript)) {
-        document.body.removeChild(gisScript);
-      }
     };
   }, []);
 
+  // Set GPAI Token and Load doc
   useEffect(() => {
     if (accessToken && gapiReady) {
       window.gapi.client.setToken({ access_token: accessToken });
@@ -125,38 +83,41 @@ function EssayEditor() {
     }
   }, [accessToken, gapiReady]);
 
-  const handleSignIn = () => {
-    console.log("Sign in clicked");
-    console.log("gapiReady:", gapiReady);
-    console.log("tokenClient:", tokenClient);
-
-    if (!gapiReady || !tokenClient) {
-      alert("Google API is still loading. Please wait a moment and try again.");
-      return;
-    }
-
+  // Connect to backend OAUTH
+  const handleSignIn = async () => {
     try {
-      tokenClient.requestAccessToken();
+
+      localStorage.setItem('redirect_after_login', '/essay/new');
+
+      const response = await fetch('http://localhost:8000/api/auth/google/login');
+      const data = await response.json();
+      
+      if (data.auth_url) {
+        // Return to homepage after logged in 
+        localStorage.setItem('redirect_after_login', '/essay/new');
+        window.location.href = data.auth_url;
+      }
     } catch (error) {
-      console.error("Error requesting token:", error);
-      alert(`Sign in error: ${error.message}`);
+      console.error("[Google Docs] Login error:", error);
+      setError("Failed to initiate Google login");
     }
   };
 
   const handleSignOut = () => {
-    if (accessToken) {
-      window.google.accounts.oauth2.revoke(accessToken, () => {
-        console.log("Token revoked");
-      });
-      setAccessToken(null);
-      setIsSignedIn(false);
-      setDocumentId(null);
-      setRecentDocs([]);
-      window.gapi.client.setToken(null);
+    setAccessToken(null);
+    setIsSignedIn(false);
+    setDocumentId(null);
+    setRecentDocs([]);
+    window.gapi.client.setToken(null);
+    
+
+    const user = getStoredUser();
+    if (user) {
+      delete user.google_access_token;
+      localStorage.setItem('user', JSON.stringify(user));
     }
   };
 
-  // Load recent Google Docs
   const loadRecentDocs = async () => {
     try {
       const response = await window.gapi.client.drive.files.list({
@@ -167,13 +128,25 @@ function EssayEditor() {
       });
 
       setRecentDocs(response.result.files || []);
-      console.log("Loaded recent docs:", response.result.files);
+      setError(null);
+      setTokenExpired(false);
+      console.log("[Google Docs] Loaded recent docs:", response.result.files);
     } catch (error) {
-      console.error("Error loading recent docs:", error);
+      console.error("[Google Docs] Error loading docs:", error);
+      
+
+      if (error.status === 401) {
+        console.warn("[Google Docs] Token expired - need re-authentication");
+        setTokenExpired(true);
+        setError("Your Google session has expired. Please sign in again.");
+        setIsSignedIn(false);
+      } else {
+        setError("Failed to load documents");
+      }
     }
   };
 
-  // Create a new Google Doc
+
   const createNewDoc = async () => {
     try {
       const title = prompt("Enter document title:", "Untitled Document");
@@ -186,22 +159,28 @@ function EssayEditor() {
       const newDocId = response.result.documentId;
       setDocumentId(newDocId);
       setDocumentTitle(title);
+      setError(null);
       loadRecentDocs();
-      console.log("Created new document:", newDocId);
-      alert(`Document created! Opening in editor...`);
+      console.log("[Google Docs] Created new document:", newDocId);
     } catch (error) {
-      console.error("Error creating document:", error);
-      alert("Failed to create document. Make sure you're signed in.");
+      console.error("[Google Docs] Error creating document:", error);
+      
+      if (error.status === 401) {
+        setTokenExpired(true);
+        setError("Your Google session has expired. Please sign in again.");
+        setIsSignedIn(false);
+      } else {
+        setError("Failed to create document");
+      }
     }
   };
 
-  // Open existing document
+
   const openDocument = (docId, docName) => {
     setDocumentId(docId);
     setDocumentTitle(docName);
   };
 
-  // Open document by ID
   const handleOpenByID = () => {
     const docId = prompt("Enter Google Doc ID:");
     if (docId) {
@@ -210,7 +189,6 @@ function EssayEditor() {
     }
   };
 
-  // Delete document
   const deleteDocument = async (docId, docName) => {
     setDeleteConfirm({ docId, docName });
   };
@@ -223,7 +201,6 @@ function EssayEditor() {
         fileId: deleteConfirm.docId,
       });
 
-      alert("Document deleted!");
       loadRecentDocs();
 
       if (documentId === deleteConfirm.docId) {
@@ -232,13 +209,12 @@ function EssayEditor() {
 
       setDeleteConfirm(null);
     } catch (error) {
-      console.error("Error deleting document:", error);
-      alert("Failed to delete document");
+      console.error("[Google Docs] Error deleting document:", error);
+      setError("Failed to delete document");
       setDeleteConfirm(null);
     }
   };
 
-  // Open in new tab
   const openInNewTab = (docId) => {
     window.open(`https://docs.google.com/document/d/${docId}/edit`, "_blank");
   };
@@ -274,31 +250,52 @@ function EssayEditor() {
               </div>
 
               <div className="flex items-center gap-2">
+                {tokenExpired && (
+                  <div className="flex items-center gap-2 text-sm text-orange-600 bg-orange-50 px-3 py-2 rounded-lg border border-orange-200">
+                    <AlertCircle size={16} />
+                    <span>Session expired</span>
+                  </div>
+                )}
+
                 {!isSignedIn ? (
                   <button
                     onClick={handleSignIn}
-                    disabled={!gapiReady || !tokenClient}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 disabled:opacity-50"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
                   >
                     <LogIn size={18} />
                     Sign in with Google
                   </button>
                 ) : (
                   <>
-                    <button
-                      onClick={createNewDoc}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
-                    >
-                      <Plus size={18} />
-                      New Document
-                    </button>
-                    <button
-                      onClick={handleOpenByID}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition flex items-center gap-2"
-                    >
-                      <FolderOpen size={18} />
-                      Open by ID
-                    </button>
+                    {tokenExpired && (
+                      <button
+                        onClick={handleSignIn}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition flex items-center gap-2"
+                      >
+                        <RefreshCw size={18} />
+                        Re-authenticate
+                      </button>
+                    )}
+
+                    {!tokenExpired && (
+                      <>
+                        <button
+                          onClick={createNewDoc}
+                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+                        >
+                          <Plus size={18} />
+                          New Document
+                        </button>
+                        <button
+                          onClick={handleOpenByID}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition flex items-center gap-2"
+                        >
+                          <FolderOpen size={18} />
+                          Open by ID
+                        </button>
+                      </>
+                    )}
+
                     <button
                       onClick={handleSignOut}
                       className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition flex items-center gap-2"
@@ -311,6 +308,17 @@ function EssayEditor() {
               </div>
             </div>
           </header>
+
+          {/* Error Display */}
+          {error && (
+            <div className="mx-6 mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-red-700 font-medium">Error</p>
+                <p className="text-red-600 text-sm">{error}</p>
+              </div>
+            </div>
+          )}
 
           {/* Main Content */}
           <main className="flex-1 flex max-w-7xl w-full mx-auto">
@@ -393,8 +401,7 @@ function EssayEditor() {
                     </p>
                     <button
                       onClick={handleSignIn}
-                      disabled={!gapiReady || !tokenClient}
-                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 mx-auto disabled:opacity-50"
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 mx-auto"
                     >
                       <LogIn size={20} />
                       Sign in with Google

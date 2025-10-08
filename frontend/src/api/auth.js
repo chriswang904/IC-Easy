@@ -89,3 +89,10 @@ export const getStoredUser = () => {
 export const isAuthenticated = () => {
   return !!localStorage.getItem('access_token');
 };
+
+export const getErrorMessage = (error) => {
+  if (error.response?.data?.detail) {
+    return error.response.data.detail;
+  }
+  return error.message || 'An error occurred';
+};

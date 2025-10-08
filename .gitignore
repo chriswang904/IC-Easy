@@ -185,3 +185,9 @@ venv/
 env/
 ENV/
 .venv/
+
+# .gitignore
+backend/models/desklib_ai_detector_fixed/
+*.bin
+*.safetensors
+*.zip

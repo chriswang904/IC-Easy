@@ -20,7 +20,7 @@ const BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
  */
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 30000, // 30 seconds timeout
+  timeout: 120000, // 120 seconds timeout
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',

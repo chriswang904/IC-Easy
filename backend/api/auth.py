@@ -1,8 +1,15 @@
+# ./api/auth.py
+import os
+import secrets
+import logging
+import json
+import urllib.parse
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr, validator
-from database import get_db
+from database import get_db, SessionLocal
 from models.user_model import User
 from utils.auth import (
     verify_password, 
@@ -10,10 +17,12 @@ from utils.auth import (
     create_access_token,
     get_current_user
 )
-import logging
+from services.google_auth_service import GoogleAuthService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+
+google_auth_service = GoogleAuthService()
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -47,15 +56,12 @@ class Token(BaseModel):
 
 @router.post("/register", response_model=Token)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    # Find existed email
     if db.query(User).filter(User.email == user_data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Find existed username
     if db.query(User).filter(User.username == user_data.username).first():
         raise HTTPException(status_code=400, detail="Username already taken")
     
-    # Create new user
     hashed_password = get_password_hash(user_data.password)
     new_user = User(
         email=user_data.email,
@@ -66,7 +72,6 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     
-    # Generate token
     access_token = create_access_token(data={"sub": new_user.id})
     
     logger.info(f"[Auth] New user registered: {new_user.username}")
@@ -77,13 +82,13 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         "user": UserResponse(
             id=new_user.id,
             email=new_user.email,
-            username=new_user.username
+            username=new_user.username,
+            created_at=new_user.created_at.isoformat()
         )
     }
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    # Find Users (Email, Password)
     user = db.query(User).filter(
         (User.email == form_data.username) | (User.username == form_data.username)
     ).first()
@@ -95,7 +100,6 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    # Generate token
     access_token = create_access_token(data={"sub": user.id})
     
     logger.info(f"[Auth] User logged in: {user.username}")
@@ -123,3 +127,89 @@ def get_me(current_user: User = Depends(get_current_user)):
 @router.get("/health")
 def auth_health():
     return {"status": "healthy", "service": "authentication"}
+
+@router.get("/google/login")
+async def google_login():
+    """Initiate Google OAuth login"""
+    state = secrets.token_urlsafe(32)
+    auth_url, _ = google_auth_service.get_authorization_url(state)
+    return {"auth_url": auth_url, "state": state}
+
+@router.get("/google/callback")
+async def google_callback(code: str, state: str = None):
+    """Handle Google OAuth callback"""
+    db = SessionLocal()
+    try:
+        logger.info(f"[Google OAuth] === CALLBACK START ===")
+        logger.info(f"[Google OAuth] Code received: {code[:30]}...")
+        
+        token_data = google_auth_service.exchange_code_for_token(code)
+        user_info = token_data["user_info"]
+        
+        logger.info(f"[Google OAuth] User info received: {user_info}")
+        
+        user = db.query(User).filter(User.email == user_info["email"]).first()
+        
+        if not user:
+            base_username = user_info["name"].replace(" ", "_").lower()
+            username = base_username
+            counter = 1
+            
+            while db.query(User).filter(User.username == username).first():
+                username = f"{base_username}_{counter}"
+                counter += 1
+            
+            logger.info(f"[Google OAuth] Creating new user: {username}")
+            
+            user = User(
+                email=user_info["email"],
+                username=username,
+                google_id=user_info["google_id"],
+                google_access_token=token_data["access_token"],
+                google_refresh_token=token_data["refresh_token"],
+                login_method="google",
+                hashed_password=None
+            )
+            db.add(user)
+        else:
+            logger.info(f"[Google OAuth] Updating existing user: {user.username}")
+            user.google_id = user_info["google_id"]
+            user.google_access_token = token_data["access_token"]
+            user.google_refresh_token = token_data["refresh_token"]
+        
+        db.commit()
+        db.refresh(user)
+        
+        # Create token
+        token_payload = {"sub": int(user.id)}
+        access_token = create_access_token(data=token_payload)
+        
+        logger.info(f"[Google OAuth] Login successful - ID: {user.id}, Username: {user.username}")
+        
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        
+        user_data = {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "picture": user_info.get("picture"),
+            "google_access_token": user.google_access_token, 
+            "created_at": user.created_at.isoformat()
+        }
+        
+        # Add user's info to JSON and URL
+        user_json = urllib.parse.quote(json.dumps(user_data))
+        redirect_url = f"{frontend_url}/login?token={access_token}&user={user_json}"
+        
+        logger.info(f"[Google OAuth] Redirecting with user data: {user_data}")
+        logger.info(f"[Google OAuth] === CALLBACK END ===")
+        
+        return RedirectResponse(url=redirect_url)
+        
+    except Exception as e:
+        logger.error(f"[Google OAuth] ERROR: {str(e)}", exc_info=True)
+        db.rollback()
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        return RedirectResponse(url=f"{frontend_url}/login?error=google_auth_failed")
+    finally:
+        db.close()
