@@ -1,7 +1,16 @@
-// pages/AIToolPage.jsx 
+// pages/AIToolPage.jsx
 
 import React, { useState } from "react";
-import { Upload, FileText, Sparkles, Shield, Clock, Loader, AlertCircle, CheckCircle } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Sparkles,
+  Shield,
+  Clock,
+  Loader,
+  AlertCircle,
+  CheckCircle,
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import { checkFilePlagiarism } from "../api/plagiarism";
@@ -55,7 +64,9 @@ export default function AIToolPage() {
       console.log(`[AITool] Processing file: ${file.name}`);
 
       if (activeTab === "plagiarism") {
-        console.log("[AITool] This may take 30-60 seconds for first-time model loading...");
+        console.log(
+          "[AITool] This may take 30-60 seconds for first-time model loading..."
+        );
         const result = await checkFilePlagiarism(file, true);
 
         console.log("[AITool] Check result:", result);
@@ -63,7 +74,6 @@ export default function AIToolPage() {
         navigate("/plagiarism-result", {
           state: {
             result: {
-  
               plagiarism_probability: result.plagiarism_probability,
               plagiarism_risk: result.plagiarism_risk,
               ai_probability: result.ai_probability,
@@ -72,20 +82,24 @@ export default function AIToolPage() {
               details: result.details,
               timestamp: result.timestamp,
               filename: file.name,
-            }
-          }
+            },
+          },
         });
-
       } else if (activeTab === "summarize") {
         alert("Summarize feature coming soon!");
       }
-
     } catch (err) {
       console.error("[AITool] Error:", err);
-      if (err.code === 'ECONNABORTED' || err.message.includes('timeout')) {
-        setError("Analysis is taking longer than expected. The models are loading for the first time. Please try again - it will be faster next time!");
+      if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
+        setError(
+          "Analysis is taking longer than expected. The models are loading for the first time. Please try again - it will be faster next time!"
+        );
       } else {
-        setError(err.response?.data?.detail || err.message || "An error occurred during processing");
+        setError(
+          err.response?.data?.detail ||
+            err.message ||
+            "An error occurred during processing"
+        );
       }
     } finally {
       setLoading(false);
@@ -96,7 +110,8 @@ export default function AIToolPage() {
     {
       icon: <Shield className="w-6 h-6" />,
       title: "AI-Powered Detection",
-      description: "Advanced Longformer model for accurate plagiarism detection",
+      description:
+        "Advanced Longformer model for accurate plagiarism detection",
     },
     {
       icon: <Clock className="w-6 h-6" />,
@@ -112,11 +127,11 @@ export default function AIToolPage() {
 
   return (
     <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
-      <div className="flex">
+      <div className="flex min-h-screen">
         <Sidebar />
 
-        <div className="flex-1 p-6" style={{ marginLeft: "5vw" }}>
-          <article className="bg-white rounded-t-3xl shadow-xl p-6 max-w-6xl">
+        <div className="flex-1 flex justify-center items-start p-6">
+          <article className="bg-white rounded-t-3xl shadow-xl p-6 w-[90%] max-w-6xl min-h-screen">
             {/* Hero Section */}
             <section className="relative h-64 rounded-3xl overflow-hidden mb-8 shadow-2xl">
               <div className="absolute inset-0 bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600" />
@@ -134,7 +149,8 @@ export default function AIToolPage() {
                   AI Research Tools
                 </h1>
                 <p className="text-purple-100 text-lg max-w-2xl">
-                  Upload your document for instant plagiarism and AI content detection
+                  Upload your document for instant plagiarism and AI content
+                  detection
                 </p>
               </div>
             </section>
@@ -149,7 +165,9 @@ export default function AIToolPage() {
                   <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center text-white mb-3">
                     {feature.icon}
                   </div>
-                  <h3 className="font-bold text-gray-800 mb-1">{feature.title}</h3>
+                  <h3 className="font-bold text-gray-800 mb-1">
+                    {feature.title}
+                  </h3>
                   <p className="text-sm text-gray-600">{feature.description}</p>
                 </div>
               ))}
@@ -215,9 +233,18 @@ export default function AIToolPage() {
                       How it works
                     </h3>
                     <ul className="text-sm text-blue-700 space-y-1">
-                      <li>• <strong>Plagiarism Detection:</strong> Uses Longformer AI model (no reference needed)</li>
-                      <li>• <strong>AI Content Detection:</strong> Ensemble model (Desklib)</li>
-                      <li>• <strong>Supported formats:</strong> TXT, DOCX, PDF (up to 10MB)</li>
+                      <li>
+                        • <strong>Plagiarism Detection:</strong> Uses Longformer
+                        AI model (no reference needed)
+                      </li>
+                      <li>
+                        • <strong>AI Content Detection:</strong> Ensemble model
+                        (Desklib)
+                      </li>
+                      <li>
+                        • <strong>Supported formats:</strong> TXT, DOCX, PDF (up
+                        to 10MB)
+                      </li>
                     </ul>
                   </div>
                 )}
@@ -247,7 +274,8 @@ export default function AIToolPage() {
                     {file ? `📄 ${file.name}` : "Drag & drop your file here"}
                   </p>
                   <p className="text-gray-500 mb-6">
-                    or click below to browse • Supports TXT, DOCX, PDF • up to 10MB
+                    or click below to browse • Supports TXT, DOCX, PDF • up to
+                    10MB
                   </p>
 
                   <input

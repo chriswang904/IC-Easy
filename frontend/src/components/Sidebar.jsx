@@ -1,37 +1,45 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Menu, Edit, Archive, Globe, Sparkles, User, LogOut } from "lucide-react";
+import {
+  Menu,
+  Edit,
+  Archive,
+  Globe,
+  Sparkles,
+  User,
+  LogOut,
+} from "lucide-react";
 
 function Sidebar() {
   const navigate = useNavigate();
-  
+
   const [user, setUser] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [imageError, setImageError] = useState(false); 
-  
+  const [imageError, setImageError] = useState(false);
+
   let menuTimeout = null;
 
   useEffect(() => {
-    const userStr = localStorage.getItem('user');
+    const userStr = localStorage.getItem("user");
     if (userStr) {
       try {
         const parsedUser = JSON.parse(userStr);
         setUser(parsedUser);
-        console.log('[Sidebar] User loaded:', parsedUser);
-        console.log('[Sidebar] Picture URL:', parsedUser.picture); 
+        console.log("[Sidebar] User loaded:", parsedUser);
+        console.log("[Sidebar] Picture URL:", parsedUser.picture);
       } catch (e) {
-        console.error('[Sidebar] Failed to parse user from localStorage:', e);
+        console.error("[Sidebar] Failed to parse user from localStorage:", e);
       }
     }
   }, []);
 
   const handleLogout = () => {
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('user');
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
     setUser(null);
-    setImageError(false); 
-    console.log('[Sidebar] User logged out');
-    navigate('/login');
+    setImageError(false);
+    console.log("[Sidebar] User logged out");
+    navigate("/login");
   };
 
   const handleMouseEnter = () => {
@@ -48,12 +56,12 @@ function Sidebar() {
   };
 
   const handleImageError = () => {
-    console.error('[Sidebar] Failed to load profile picture:', user.picture);
+    console.error("[Sidebar] Failed to load profile picture:", user.picture);
     setImageError(true);
   };
 
   const handleImageLoad = () => {
-    console.log('[Sidebar] Profile picture loaded successfully');
+    console.log("[Sidebar] Profile picture loaded successfully");
     setImageError(false);
   };
 
@@ -66,8 +74,8 @@ function Sidebar() {
   const UserAvatar = ({ size = "w-8 h-8" }) => {
     if (user.picture && !imageError) {
       return (
-        <img 
-          src={user.picture} 
+        <img
+          src={user.picture}
           alt={`${user.username}'s profile`}
           className={`${size} rounded-full border-2 border-purple-300 object-cover`}
           referrerPolicy="no-referrer"
@@ -76,10 +84,14 @@ function Sidebar() {
         />
       );
     }
-    
+
     return (
-      <div className={`${size} rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold ${size === "w-8 h-8" ? "text-sm" : "text-base"}`}>
-        {user.username?.[0]?.toUpperCase() || 'U'}
+      <div
+        className={`${size} rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-bold ${
+          size === "w-8 h-8" ? "text-sm" : "text-base"
+        }`}
+      >
+        {user.username?.[0]?.toUpperCase() || "U"}
       </div>
     );
   };
@@ -126,7 +138,7 @@ function Sidebar() {
 
       <div className="mt-auto">
         {user ? (
-          <div 
+          <div
             className="relative"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -138,22 +150,28 @@ function Sidebar() {
                 {user.username}
               </span>
             </button>
-            
+
             {showUserMenu && (
               <div className="absolute bottom-0 left-full ml-2 bg-white shadow-xl rounded-lg p-3 w-48 border border-gray-200 z-50">
                 <div className="flex items-center gap-2 mb-3 pb-3 border-b">
                   {/* UserAvatar  */}
                   <UserAvatar size="w-10 h-10" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate" title={user.username}>
+                    <p
+                      className="font-semibold text-sm truncate"
+                      title={user.username}
+                    >
                       {user.username}
                     </p>
-                    <p className="text-xs text-gray-500 truncate" title={user.email}>
+                    <p
+                      className="text-xs text-gray-500 truncate"
+                      title={user.email}
+                    >
                       {user.email}
                     </p>
                   </div>
                 </div>
-                
+
                 <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition"

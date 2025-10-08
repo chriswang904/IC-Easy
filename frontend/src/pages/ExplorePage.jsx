@@ -185,8 +185,8 @@ const ExplorePage = () => {
     <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
       <div className="flex min-h-screen">
         <Sidebar />
-        <div className="flex-1 p-6" style={{ marginLeft: "5vw" }}>
-          <article className="bg-white rounded-t-3xl shadow-xl p-6 max-w-6xl">
+        <div className="flex-1 flex justify-center items-start p-6">
+          <article className="bg-white rounded-t-3xl shadow-xl p-6 w-[90%] max-w-6xl min-h-screen">
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* Main scrollable content */}
               <div className="flex-1 overflow-y-auto">
