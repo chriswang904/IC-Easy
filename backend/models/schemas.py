@@ -43,29 +43,23 @@ class TokenData(BaseModel):
 
 # Added Advanced Search
 class AdvancedSearchFilters(BaseModel):
-    year_min: Optional[int] = Field(None, description="Minimum publication year")
-    year_max: Optional[int] = Field(None, description="Maximum publication year")
-    min_citations: Optional[int] = Field(None, description="Minimum citation count")
-    authors: Optional[List[str]] = Field(None, description="Filter by author names")
-    journals: Optional[List[str]] = Field(None, description="Filter by journal or conference")
-    open_access_only: Optional[bool] = Field(False, description="Only include open access papers")
-    sort_by: Optional[str] = Field("relevance", description="Sort by: relevance | citations | year | journal_impact")
+    """Advanced search filters - matches frontend field names"""
+    author: Optional[str] = Field(None, description="Filter by author name")
+    year_from: Optional[int] = Field(None, ge=1900, le=2100, description="Minimum publication year")
+    year_to: Optional[int] = Field(None, ge=1900, le=2100, description="Maximum publication year")
+    journal: Optional[str] = Field(None, description="Filter by journal or conference")
+    keywords: Optional[List[str]] = Field(None, description="Filter by keywords")
+    citation_min: Optional[int] = Field(None, ge=0, description="Minimum citation count")
+    citation_max: Optional[int] = Field(None, ge=0, description="Maximum citation count")
+    open_access: Optional[bool] = Field(False, description="Only include open access papers")
 
-class LiteratureSearchFilters(BaseModel):
-    """Advanced search filters"""
-    sort_by: Optional[str] = "relevance"
-    author: Optional[str] = None
-    year_from: Optional[int] = None
-    year_to: Optional[int] = None
-    journal: Optional[str] = None
-    keywords: Optional[str] = None
-    citation_min: Optional[int] = None
-    citation_max: Optional[int] = None
-    open_access: Optional[bool] = False
     
 class LiteratureAdvancedSearchRequest(BaseModel):
-    keyword: str
-    limit: int = 10
+    """Advanced search request"""
+    keyword: str = Field(..., min_length=1, max_length=500)
+    limit: int = Field(10, ge=1, le=50)
+    source: str = Field("all", pattern="^(all|crossref|arxiv|openalex)$")
+    sort_by: str = Field("relevance", pattern="^(relevance|year|citations)$")
     filters: Optional[AdvancedSearchFilters] = None
 
 # Literature search request schema
@@ -95,7 +89,7 @@ class LiteratureItem(BaseModel):
     published_date: Optional[str] = None
     doi: Optional[str] = None
     url: Optional[str] = None
-    citation_count: Optional[int] = 0
+    citation_count: Optional[int] = None
     source: Optional[str] = None  # crossref, arxiv, or openalex
 
 # Literature search response schema

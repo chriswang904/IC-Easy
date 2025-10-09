@@ -31,7 +31,7 @@ export default function Homepage() {
       handleSearch();
     }
   }, [sortBy, source]);
-  
+
   // Advanced search state
   const [advancedFilters, setAdvancedFilters] = useState({
     author: "",
@@ -103,11 +103,33 @@ export default function Homepage() {
 
     try {
       console.log("[Homepage] Searching for:", searchQuery);
+
+      const filters = {};
+
+      if (advancedFilters.author) filters.author = advancedFilters.author;
+      if (advancedFilters.yearFrom)
+        filters.year_from = parseInt(advancedFilters.yearFrom);
+      if (advancedFilters.yearTo)
+        filters.year_to = parseInt(advancedFilters.yearTo);
+      if (advancedFilters.journal) filters.journal = advancedFilters.journal;
+      if (advancedFilters.keywords) {
+        filters.keywords = advancedFilters.keywords
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean);
+      }
+      if (advancedFilters.citationMin)
+        filters.citation_min = parseInt(advancedFilters.citationMin);
+      if (advancedFilters.citationMax)
+        filters.citation_max = parseInt(advancedFilters.citationMax);
+      if (advancedFilters.openAccess) filters.open_access = true;
+
       console.log("[Homepage] Search params:", {
         keyword: searchQuery,
         limit: 10,
         source,
         sort_by: sortBy,
+        filters: Object.keys(filters).length > 0 ? filters : null,
       });
 
       const result = await searchLiterature({
@@ -115,7 +137,7 @@ export default function Homepage() {
         limit: 10,
         source,
         sort_by: sortBy,
-        filters: null,
+        filters: Object.keys(filters).length > 0 ? filters : null,
       });
 
       console.log("[Homepage] Search results:", result);
@@ -140,12 +162,24 @@ export default function Homepage() {
           ? paper.authors.map((a) => a.name || a).filter(Boolean)
           : [];
 
+        let citationText = "";
+        if (paper.source === "arxiv") {
+          citationText = "Preprint (no citation data)";
+        } else if (
+          paper.citation_count !== null &&
+          paper.citation_count !== undefined
+        ) {
+          citationText = `${paper.citation_count} citations`;
+        } else {
+          citationText = "Citation data unavailable";
+        }
+
         return {
           id: paper.doi || paper.url || `paper-${index}`,
           image: "/images/note1.jpg", // Default image
           title: paper.title || "Untitled",
           category: paper.journal || paper.source || "Research Paper",
-          metadata: `${paper.citation_count || 0} citations • ${year}`,
+          metadata: `${citationText} • ${year}`,
           description: paper.abstract || "No abstract available.",
           color: `bg-${
             ["blue", "green", "purple", "pink", "yellow"][index % 5]
@@ -153,6 +187,8 @@ export default function Homepage() {
           authors: authorNames,
           doi: paper.doi,
           url: paper.url,
+          source: paper.source,
+          citationCount: paper.citation_count,
         };
       });
 
@@ -213,7 +249,6 @@ export default function Homepage() {
       document.querySelector('button[type="submit"]').click();
     }, 0);
   };
-
 
   const resetAdvancedFilters = () => {
     setAdvancedFilters({
@@ -638,16 +673,38 @@ export default function Homepage() {
                         className="w-full h-full object-cover rounded-2xl"
                       />
                     </div>
+
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-lg font-bold text-gray-900 mb-1 group-hover:text-purple-600 transition">
-                        {paper.title}
-                      </h2>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h2 className="text-lg font-bold text-gray-900 group-hover:text-purple-600 transition flex-1">
+                          {paper.title}
+                        </h2>
+                        {paper.source && (
+                          <span
+                            className={`px-2 py-0.5 text-xs font-medium rounded-full flex-shrink-0 ${
+                              paper.source === "arxiv"
+                                ? "bg-orange-100 text-orange-700"
+                                : paper.source === "crossref"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-green-100 text-green-700"
+                            }`}
+                          >
+                            {paper.source === "arxiv"
+                              ? "arXiv"
+                              : paper.source === "crossref"
+                              ? "CrossRef"
+                              : "OpenAlex"}
+                          </span>
+                        )}
+                      </div>
+
                       <p className="text-sm text-gray-600 mb-2">
                         <span className="font-medium text-purple-600">
                           {paper.category}
                         </span>{" "}
                         • {paper.metadata}
                       </p>
+
                       {paper.authors && paper.authors.length > 0 && (
                         <p className="text-xs text-gray-500 mb-1">
                           {paper.authors.slice(0, 3).join(", ")}
@@ -655,10 +712,21 @@ export default function Homepage() {
                             ` +${paper.authors.length - 3} more`}
                         </p>
                       )}
+
                       <p className="text-sm text-gray-600 line-clamp-2">
                         {paper.description}
                       </p>
+
+                      {paper.source === "arxiv" && (
+                        <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          <span className="italic">
+                            Preprint - citation data not available
+                          </span>
+                        </p>
+                      )}
                     </div>
+
                     <button className="p-2 hover:bg-purple-100 rounded-full transition opacity-0 group-hover:opacity-100">
                       <Star className="w-5 h-5 text-gray-400" />
                     </button>

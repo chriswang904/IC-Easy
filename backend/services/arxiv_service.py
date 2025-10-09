@@ -141,6 +141,6 @@ class ArXivService:
             url=entry.id if hasattr(entry, 'id') else None,
             published_date=published_date,
             journal=journal,
-            citation_count=0,  # arXiv doesn't provide citation counts
+            citation_count=None,  # arXiv doesn't provide citation counts
             source="arxiv"
         )

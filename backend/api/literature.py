@@ -22,6 +22,7 @@ from database import get_db
 from typing import Optional
 from sqlalchemy.orm import Session
 import logging
+from datetime import datetime
 
 
 logger = logging.getLogger(__name__)
@@ -273,7 +274,6 @@ async def health_check():
         "available_formats": ["apa", "ieee", "mla"]
     }
 
-# Added search-all 
 @router.post("/search-all", response_model=LiteratureSearchResponse)
 async def search_all_sources(
     request: LiteratureAdvancedSearchRequest, 
@@ -281,36 +281,53 @@ async def search_all_sources(
     db: Session = Depends(get_db)
 ):
     """
-    Search literature across ALL sources with filters and history logging
+    Search literature across ALL sources with advanced filters
     """
     if not request.keyword.strip():
         raise HTTPException(status_code=400, detail="Keyword cannot be empty")
     
-    logger.info(f"[Advanced Search] Keyword='{request.keyword}', Filters={request.filters}")
+    logger.info(
+        f"[Advanced Search] Keyword='{request.keyword}', "
+        f"Source={request.source}, Sort={request.sort_by}, "
+        f"Filters={request.filters}"
+    )
     
     try:
+        # Convert filters to dict and add sort_by
+        filters_dict = None
+        if request.filters:
+            filters_dict = request.filters.dict(exclude_none=True)
+            filters_dict["sort_by"] = request.sort_by  # Add sort_by to filters
+        else:
+            filters_dict = {"sort_by": request.sort_by}
+        
         # Perform aggregated search
         results = await literature_aggregator.search_all_sources(
             keyword=request.keyword,
             limit_per_source=request.limit,
-            filters=request.filters.dict() if request.filters else None
+            filters=filters_dict
         )
         
-        # Log to history
+        # Log to history if user is authenticated
         if current_user:
-            HistoryService(db).log_search(
-                keyword=request.keyword,
-                source="all",
-                total_results=len(results),
-                user_id=current_user.id
-            )
+            try:
+                HistoryService(db).log_search(
+                    keyword=request.keyword,
+                    source=request.source,
+                    total_results=len(results),
+                    user_id=current_user.id
+                )
+            except Exception as e:
+                logger.warning(f"[Search History] Failed to log: {e}")
         
         logger.info(f"[Advanced Search] Returned {len(results)} results")
         
         return LiteratureSearchResponse(
             total=len(results),
             results=results,
-            source="all"
+            source=request.source,
+            query=request.keyword,
+            timestamp=datetime.now().isoformat()
         )
         
     except Exception as e:

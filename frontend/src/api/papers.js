@@ -12,13 +12,21 @@ import apiClient from './client';
 /**
  * Search for academic literature
  */
-export const searchLiterature = async ({ keyword, limit = 10, source = 'crossref', sort_by = 'relevance' }) => {
+export const searchLiterature = async ({ 
+  keyword, 
+  limit = 10, 
+  source = 'crossref', 
+  sort_by = 'relevance', 
+  filters = null 
+}) => {
   try {
     if (source === 'all') {
       const response = await apiClient.post('/api/literature/search-all', {
         keyword,
         limit,
-        filters: { sort_by },
+        source: 'all',  
+        sort_by,        
+        filters         
       });
       return response.data;
     } else {
@@ -27,6 +35,7 @@ export const searchLiterature = async ({ keyword, limit = 10, source = 'crossref
         limit,
         source,
         sort_by,
+        filters 
       });
       return response.data;
     }

@@ -182,7 +182,7 @@ class LiteratureAggregator:
             )
         
         return unique_papers
-    
+
     def _apply_advanced_filters(
         self,
         papers: List[LiteratureItem],
@@ -191,20 +191,15 @@ class LiteratureAggregator:
         """
         Apply advanced filters to paper list
         
-        Supported filters:
-        - year_min: Minimum publication year
-        - year_max: Maximum publication year
-        - min_citations: Minimum citation count
-        - authors: List of author names to match
-        - journals: List of journal/conference names to match
-        - open_access_only: Only include open access papers
-        
-        Args:
-            papers: List of papers to filter
-            filters: Dictionary of filter criteria
-            
-        Returns:
-            Filtered list of papers
+        Supported filters (matches frontend field names):
+        - author: Author name to match (string)
+        - year_from: Minimum publication year
+        - year_to: Maximum publication year
+        - journal: Journal/conference name to match (string)
+        - keywords: List of keywords to match
+        - citation_min: Minimum citation count
+        - citation_max: Maximum citation count
+        - open_access: Only include open access papers
         """
         if not filters:
             return papers
@@ -213,54 +208,72 @@ class LiteratureAggregator:
         
         for paper in papers:
             # Year range filter
-            if filters.get("year_min") or filters.get("year_max"):
+            if filters.get("year_from") or filters.get("year_to"):
                 year = self._extract_year(paper.published_date)
                 if year == 0:
-                    # Skip papers without valid year if year filter is active
                     continue
                 
-                if filters.get("year_min") and year < filters["year_min"]:
+                if filters.get("year_from") and year < filters["year_from"]:
                     continue
-                if filters.get("year_max") and year > filters["year_max"]:
+                if filters.get("year_to") and year > filters["year_to"]:
                     continue
             
             # Citation count filter
-            if filters.get("min_citations"):
+            if filters.get("citation_min") is not None:
                 citation_count = paper.citation_count or 0
-                if citation_count < filters["min_citations"]:
+                if citation_count < filters["citation_min"]:
                     continue
             
-            # Author filter (case-insensitive partial match)
-            if filters.get("authors"):
+            if filters.get("citation_max") is not None:
+                citation_count = paper.citation_count or 0
+                if citation_count > filters["citation_max"]:
+                    continue
+            
+            # Author filter (single string, case-insensitive partial match)
+            if filters.get("author"):
                 if not paper.authors:
                     continue
                 
+                author_query = filters["author"].lower()
                 author_names = [a.name.lower() for a in paper.authors]
-                filter_authors = [a.lower() for a in filters["authors"]]
                 
-                # Check if any filter author is in any paper author name
-                if not any(
-                    any(filter_author in author_name for author_name in author_names)
-                    for filter_author in filter_authors
-                ):
+                # Check if filter author is in any paper author name
+                if not any(author_query in author_name for author_name in author_names):
                     continue
             
-            # Journal filter (case-insensitive partial match)
-            if filters.get("journals"):
+            # Journal filter (single string, case-insensitive partial match)
+            if filters.get("journal"):
                 if not paper.journal:
                     continue
                 
-                journal_lower = paper.journal.lower()
-                filter_journals = [j.lower() for j in filters["journals"]]
+                journal_query = filters["journal"].lower()
+                paper_journal = paper.journal.lower()
                 
-                if not any(filter_journal in journal_lower for filter_journal in filter_journals):
+                if journal_query not in paper_journal:
+                    continue
+            
+            # Keywords filter (list of strings)
+            if filters.get("keywords"):
+                keywords = filters["keywords"]
+                if not isinstance(keywords, list):
+                    keywords = [keywords]
+                
+                keywords_lower = [k.lower() for k in keywords]
+                
+                # Check if any keyword appears in title or abstract
+                title_lower = paper.title.lower() if paper.title else ""
+                abstract_lower = paper.abstract.lower() if paper.abstract else ""
+                
+                if not any(
+                    kw in title_lower or kw in abstract_lower
+                    for kw in keywords_lower
+                ):
                     continue
             
             # Open access filter
-            if filters.get("open_access_only"):
-                # Simple heuristic: check if paper has accessible URL
-                # More sophisticated: check DOI for OA status
-                if not paper.url:
+            if filters.get("open_access"):
+                # Check if paper has accessible URL or is from arXiv
+                if not paper.url and paper.source != "arxiv":
                     continue
             
             # Paper passed all filters
@@ -299,7 +312,7 @@ class LiteratureAggregator:
             if sort_by == "citations":
                 sorted_papers = sorted(
                     papers, 
-                    key=lambda x: x.citation_count or 0, 
+                    key=lambda x: x.citation_count if x.citation_count is not None else -1, 
                     reverse=True
                 )
             
@@ -391,38 +404,42 @@ class LiteratureAggregator:
         # Search for 4-digit year (19xx or 20xx)
         match = re.search(r'\b(19|20)\d{2}\b', str(date_str))
         return int(match.group(0)) if match else 0
-    
+
     @staticmethod
     def _format_filter_summary(filters: dict) -> str:
-        """
-        Create human-readable summary of active filters
-        
-        Args:
-            filters: Dictionary of filter criteria
-            
-        Returns:
-            Comma-separated string of active filters
-        """
+        """Create human-readable summary of active filters"""
         active_filters = []
         
-        if filters.get("year_min") or filters.get("year_max"):
+        if filters.get("year_from") or filters.get("year_to"):
             year_range = []
-            if filters.get("year_min"):
-                year_range.append(f"≥{filters['year_min']}")
-            if filters.get("year_max"):
-                year_range.append(f"≤{filters['year_max']}")
+            if filters.get("year_from"):
+                year_range.append(f"≥{filters['year_from']}")
+            if filters.get("year_to"):
+                year_range.append(f"≤{filters['year_to']}")
             active_filters.append(f"year: {' & '.join(year_range)}")
         
-        if filters.get("min_citations"):
-            active_filters.append(f"citations ≥{filters['min_citations']}")
+        if filters.get("citation_min") or filters.get("citation_max"):
+            citation_range = []
+            if filters.get("citation_min"):
+                citation_range.append(f"≥{filters['citation_min']}")
+            if filters.get("citation_max"):
+                citation_range.append(f"≤{filters['citation_max']}")
+            active_filters.append(f"citations: {' & '.join(citation_range)}")
         
-        if filters.get("authors"):
-            active_filters.append(f"authors: {len(filters['authors'])} specified")
+        if filters.get("author"):
+            active_filters.append(f"author: '{filters['author']}'")
         
-        if filters.get("journals"):
-            active_filters.append(f"journals: {len(filters['journals'])} specified")
+        if filters.get("journal"):
+            active_filters.append(f"journal: '{filters['journal']}'")
         
-        if filters.get("open_access_only"):
+        if filters.get("keywords"):
+            keywords = filters["keywords"]
+            if isinstance(keywords, list):
+                active_filters.append(f"keywords: {len(keywords)} specified")
+            else:
+                active_filters.append(f"keywords: 1 specified")
+        
+        if filters.get("open_access"):
             active_filters.append("open access only")
         
         return ", ".join(active_filters) if active_filters else "none"

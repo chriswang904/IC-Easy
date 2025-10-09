@@ -110,8 +110,8 @@ class OpenAlexService:
 
             # Extract journal/source information
             primary_location = work.get("primary_location", {})
-            source = primary_location.get("source", {})
-            journal = source.get("display_name")
+            source = primary_location.get("source") if primary_location else None
+            journal = source.get("display_name") if source else None
 
             return LiteratureItem(
                 title=title,
