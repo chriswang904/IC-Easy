@@ -84,7 +84,7 @@ class AIDetectorService:
 
         return {
             "status": "success",
-            "ai_probability": p,
+            "ai_probability": p *100.0,
             "is_ai_generated": is_ai,
             "confidence": conf,
             "threshold_used": threshold,

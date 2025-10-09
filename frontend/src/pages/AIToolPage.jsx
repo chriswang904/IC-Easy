@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
-import { checkFilePlagiarism } from "../api/plagiarism";
+import { checkAIOnly } from "../api";
 
 export default function AIToolPage() {
   const navigate = useNavigate();
@@ -67,24 +67,37 @@ export default function AIToolPage() {
         console.log(
           "[AITool] This may take 30-60 seconds for first-time model loading..."
         );
-        const result = await checkFilePlagiarism(file, true);
+        const result = await checkAIOnly(file, true);
 
         console.log("[AITool] Check result:", result);
 
         navigate("/plagiarism-result", {
-          state: {
-            result: {
-              plagiarism_probability: result.plagiarism_probability,
-              plagiarism_risk: result.plagiarism_risk,
-              ai_probability: result.ai_probability,
-              is_ai_generated: result.is_ai_generated,
-              ai_confidence: result.ai_confidence,
-              details: result.details,
-              timestamp: result.timestamp,
-              filename: file.name,
-            },
+        state: {
+          result: {
+
+            plagiarism_probability: result.plagiarism_probability,
+            plagiarism_percent: result.plagiarism_percent,  
+            unique_percent: result.unique_percent,          
+            plagiarism_risk: result.plagiarism_risk,
+            plagiarism_method: result.plagiarism_method,    
+            
+            ai_probability: result.ai_probability,
+            is_ai_generated: result.is_ai_generated,
+            ai_confidence: result.ai_confidence,
+            ai_detection_method: result.ai_detection_method, 
+            
+            overall_risk: result.overall_risk,               
+            sources_found: result.sources_found,             
+            top_sources: result.top_sources,                 
+            report_url: result.report_url,                   
+            recommendations: result.recommendations,         
+            
+            details: result.details,
+            timestamp: result.timestamp,
+            filename: file.name,
           },
-        });
+        },
+      });
       } else if (activeTab === "summarize") {
         alert("Summarize feature coming soon!");
       }
@@ -95,11 +108,17 @@ export default function AIToolPage() {
           "Analysis is taking longer than expected. The models are loading for the first time. Please try again - it will be faster next time!"
         );
       } else {
-        setError(
-          err.response?.data?.detail ||
-            err.message ||
-            "An error occurred during processing"
-        );
+        const backendDetail = err.response?.data?.detail;
+        if (Array.isArray(backendDetail)) {
+          setError(backendDetail[0]?.msg || JSON.stringify(backendDetail));
+        } else if (typeof backendDetail === "object") {
+          setError(backendDetail?.msg || JSON.stringify(backendDetail));
+        } else {
+          setError(
+            err.message || "An error occurred during processing"
+          );
+        }
+
       }
     } finally {
       setLoading(false);
@@ -233,10 +252,6 @@ export default function AIToolPage() {
                       How it works
                     </h3>
                     <ul className="text-sm text-blue-700 space-y-1">
-                      <li>
-                        • <strong>Plagiarism Detection:</strong> Uses Longformer
-                        AI model (no reference needed)
-                      </li>
                       <li>
                         • <strong>AI Content Detection:</strong> Ensemble model
                         (Desklib)

@@ -1,7 +1,12 @@
-# models/schemas.py
+# models/schemas.py (COMPLETE VERSION)
+"""
+Pydantic schemas for API requests and responses
+Includes all schemas for Literature, Plagiarism, History, and Auth
+"""
+
 from pydantic import BaseModel, Field, EmailStr, validator
-from typing import Optional, List, Dict, Any, Union, Literal
-from datetime import datetime, date
+from typing import Optional, List, Dict, Any, Union
+from datetime import datetime
 
 # ==================== USER & AUTH SCHEMAS ====================
 
@@ -41,15 +46,11 @@ class TokenData(BaseModel):
 
 # ==================== LITERATURE SCHEMAS ====================
 
-# Added Advanced Search
-class AdvancedSearchFilters(BaseModel):
-    year_min: Optional[int] = Field(None, description="Minimum publication year")
-    year_max: Optional[int] = Field(None, description="Maximum publication year")
-    min_citations: Optional[int] = Field(None, description="Minimum citation count")
-    authors: Optional[List[str]] = Field(None, description="Filter by author names")
-    journals: Optional[List[str]] = Field(None, description="Filter by journal or conference")
-    open_access_only: Optional[bool] = Field(False, description="Only include open access papers")
-    sort_by: Optional[str] = Field("relevance", description="Sort by: relevance | citations | year | journal_impact")
+class LiteratureSearchRequest(BaseModel):
+    """Basic literature search request"""
+    keyword: str = Field(..., min_length=2, description="Search keyword")
+    limit: int = Field(default=10, ge=1, le=50, description="Number of results")
+    source: str = Field(default="crossref", description="Data source: crossref/arxiv/openalex")
 
 class LiteratureSearchFilters(BaseModel):
     """Advanced search filters"""
@@ -64,60 +65,72 @@ class LiteratureSearchFilters(BaseModel):
     open_access: Optional[bool] = False
     
 class LiteratureAdvancedSearchRequest(BaseModel):
-    keyword: str
-    limit: int = 10
-    filters: Optional[AdvancedSearchFilters] = None
-
-# Literature search request schema
-class LiteratureSearchRequest(BaseModel):
-    keyword: str = Field(..., min_length=1, description="Search keyword")
+    """Advanced literature search with filters"""
+    keyword: str = Field(..., min_length=2, description="Search keyword")
     limit: int = Field(default=10, ge=1, le=50, description="Number of results")
-    source: Literal["crossref", "arxiv", "openalex"] = Field(
-        default="crossref",
-        description="Data source: crossref, arxiv, or openalex"
-    )
+    source: str = Field(default="crossref", description="Data source: crossref/arxiv/openalex/semantic_scholar")
+    year_from: Optional[int] = Field(default=None, description="Start year filter")
+    year_to: Optional[int] = Field(default=None, description="End year filter")
+    author: Optional[str] = Field(default=None, description="Author name filter")
+    sort_by: Optional[str] = Field(default="relevance", description="Sort by: relevance/date/citations")
 
-# Author information schema
 class Author(BaseModel):
+    """Author information"""
     name: str
     affiliation: Optional[str] = None
 
-# Literature item schema
 class LiteratureItem(BaseModel):
+    """Single literature item"""
     title: str
-    authors: Optional[List[Author]] = None
+    authors: List[str] = Field(default_factory=list)
+    year: Optional[int] = None
     abstract: Optional[str] = None
-    journal: Optional[str] = None
-    volume: Optional[str] = None
-    issue: Optional[str] = None
-    pages: Optional[str] = None
-    month: Optional[str] = None
-    published_date: Optional[str] = None
     doi: Optional[str] = None
     url: Optional[str] = None
-    citation_count: Optional[int] = 0
-    source: Optional[str] = None  # crossref, arxiv, or openalex
-
-# Literature search response schema
-class LiteratureSearchResponse(BaseModel):
-    total: int
-    results: List[LiteratureItem]
     source: str
+    citation_count: Optional[int] = None
+    journal: Optional[str] = None
+    keywords: Optional[List[str]] = Field(default_factory=list)
 
-# Reference format request schema
+class LiteratureSearchResponse(BaseModel):
+    """Response schema for literature search"""
+    results: List[LiteratureItem]
+    total: int
+    source: str
+    query: str
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+
 class ReferenceFormatRequest(BaseModel):
-    literature: LiteratureItem
-    # format: str = Field(..., description="Citation format: apa, ieee, or mla")
-    format: Literal["apa", "ieee", "mla"]
+    """Request schema for reference formatting"""
+    literature: Dict[str, Any] = Field(..., description="Literature metadata")
+    format_style: str = Field(default="apa", description="Citation style: apa/ieee/mla/chicago")
 
-# Reference format response schema
 class ReferenceFormatResponse(BaseModel):
+    """Response schema for formatted reference"""
     formatted_reference: str
-    format: str
+    style: str
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+class BatchReferenceFormatRequest(BaseModel):
+    """Batch reference formatting request"""
+    references: List[Dict[str, Any]] = Field(..., description="List of literature items")
+    format_style: str = Field(default="apa", description="Citation style")
+
+class BatchReferenceFormatResponse(BaseModel):
+    """Batch reference formatting response"""
+    formatted_references: List[str]
+    style: str
+    total: int
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat())
 
 
+class SentenceSimilarity(BaseModel):
+    """Sentence-level similarity result"""
+    sentence: str
+    max_similarity: float
+    similar_source_idx: Optional[int] = None
 
-  # ==================== HISTORY SCHEMAS ====================
+# ==================== HISTORY SCHEMAS ====================
 
 class HistoryItem(BaseModel):
     """History record"""
@@ -202,3 +215,4 @@ class PlagiarismTextRequest(BaseModel):
         if len(v) > 50000:
             raise ValueError('Text is too long (maximum 50,000 characters)')
         return v
+

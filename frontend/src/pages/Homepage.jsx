@@ -11,6 +11,7 @@ import {
   Zap,
   FileText,
 } from "lucide-react";
+import { searchLiterature, getErrorMessage } from "../api";
 
 import Sidebar from "../components/Sidebar";
 export default function Homepage() {
@@ -25,6 +26,12 @@ export default function Homepage() {
   const [searchHistory, setSearchHistory] = useState([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
 
+  useEffect(() => {
+    if (searchPerformed) {
+      handleSearch();
+    }
+  }, [sortBy, source]);
+  
   // Advanced search state
   const [advancedFilters, setAdvancedFilters] = useState({
     author: "",
@@ -40,40 +47,47 @@ export default function Homepage() {
   const defaultPapers = [
     {
       id: "1",
-      image:
-        "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400",
+      image: "/images/note1.jpg",
       title: "Attention Is All You Need",
       category: "Machine Learning",
       metadata: "45,231 citations • Added 2 days ago",
       description:
-        "Transformer architecture paper introducing self-attention mechanisms.",
-      authors: ["Vaswani et al."],
+        "Transformer architecture paper introducing self-attention mechanisms. Key findings on sequence-to-sequence models and applications in NLP tasks.",
+      color: "bg-blue-50",
     },
     {
       id: "2",
-      image:
-        "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400",
+      image: "/images/note2.jpg",
       title: "Climate Change Impact on Ecosystems",
       category: "Environmental Science",
       metadata: "Open Access • Added 1 week ago",
-      description: "Comprehensive study analyzing biodiversity loss patterns.",
-      authors: ["Smith, J.", "Brown, A."],
+      description:
+        "Comprehensive study analyzing biodiversity loss patterns and ecosystem adaptation strategies under various climate scenarios through 2050.",
+      color: "bg-green-50",
     },
     {
       id: "3",
-      image:
-        "https://images.unsplash.com/photo-1576086213369-97a306d36557?w=400",
+      image: "/images/note3.jpg",
       title: "CRISPR Gene Editing Applications",
       category: "Biotechnology",
       metadata: "Peer-reviewed • Added 3 weeks ago",
-      description: "Latest developments in gene therapy techniques.",
-      authors: ["Johnson, R.", "Davis, M."],
+      description:
+        "Latest developments in gene therapy techniques, focusing on disease treatment protocols and ethical considerations in clinical applications.",
+      color: "bg-purple-50",
     },
   ];
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  /**
+   * Handle search submission
+   */
+  const handleSearch = async (e) => {
+    e?.preventDefault();
 
+    if (!searchQuery.trim()) {
+      return;
+    }
+
+    // Add to search history (keep last 10)
     setSearchHistory((prev) => {
       const newHistory = [
         searchQuery,
@@ -86,45 +100,90 @@ export default function Homepage() {
     setError(null);
     setSearchPerformed(true);
     setShowSearchHistory(false);
-    setShowAdvancedSearch(false);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      console.log("[Homepage] Searching for:", searchQuery);
+      console.log("[Homepage] Search params:", {
+        keyword: searchQuery,
+        limit: 10,
+        source,
+        sort_by: sortBy,
+      });
 
-      const mockResults = [
-        {
-          id: "search-1",
-          image:
-            "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=400",
-          title: `Results for: ${searchQuery}`,
-          category: "Research Paper",
-          metadata: "1,234 citations • 2023",
-          description: `This paper discusses ${searchQuery} in great detail.`,
-          authors: ["John Doe", "Jane Smith"],
-        },
-        {
-          id: "search-2",
-          image:
-            "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=400",
-          title: `Advanced Study on ${searchQuery}`,
-          category: "Scientific Journal",
-          metadata: "567 citations • 2024",
-          description: `A comprehensive investigation into ${searchQuery}.`,
-          authors: ["Alice Brown", "Charlie Davis"],
-        },
-      ];
+      const result = await searchLiterature({
+        keyword: searchQuery,
+        limit: 10,
+        source,
+        sort_by: sortBy,
+        filters: null,
+      });
 
-      setPapers(mockResults);
+      console.log("[Homepage] Search results:", result);
+      console.log("[Homepage] Number of results:", result.results?.length || 0);
+
+      // Log first result structure if available
+      if (result.results && result.results.length > 0) {
+        console.log("[Homepage] First result structure:", result.results[0]);
+      }
+
+      // Transform API results to match component format
+      const transformedPapers = (result.results || []).map((paper, index) => {
+        // Extract year from published_date
+        let year = "N/A";
+        if (paper.published_date) {
+          const match = paper.published_date.match(/^(\d{4})/);
+          year = match ? match[1] : "N/A";
+        }
+
+        // Get author names from authors array
+        const authorNames = paper.authors
+          ? paper.authors.map((a) => a.name || a).filter(Boolean)
+          : [];
+
+        return {
+          id: paper.doi || paper.url || `paper-${index}`,
+          image: "/images/note1.jpg", // Default image
+          title: paper.title || "Untitled",
+          category: paper.journal || paper.source || "Research Paper",
+          metadata: `${paper.citation_count || 0} citations • ${year}`,
+          description: paper.abstract || "No abstract available.",
+          color: `bg-${
+            ["blue", "green", "purple", "pink", "yellow"][index % 5]
+          }-50`,
+          authors: authorNames,
+          doi: paper.doi,
+          url: paper.url,
+        };
+      });
+
+      setPapers(transformedPapers);
+
+      if (transformedPapers.length === 0) {
+        setError("No results found. Try different keywords.");
+      }
     } catch (err) {
-      setError("An error occurred while searching");
+      console.error("[Homepage] Search error:", err);
+      let errorMessage = "An error occurred while searching";
+
+      if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
       setPapers([]);
     } finally {
       setLoading(false);
     }
   };
 
+  /**
+   * Handle search input change with debounce
+   */
   const handleSearchChange = (e) => {
     setSearchQuery(e.target.value);
+    // Reset to default papers when search is cleared
     if (e.target.value === "" && searchPerformed) {
       setPapers([]);
       setSearchPerformed(false);
@@ -132,15 +191,29 @@ export default function Homepage() {
     }
   };
 
+  /**
+   * Handle paper click
+   */
   const handlePaperClick = (paper) => {
-    console.log("Paper clicked:", paper);
+    console.log("[Homepage] Paper clicked:", paper);
+    // Navigate to paper detail page or open URL
+    if (paper.url) {
+      window.open(paper.url, "_blank");
+    }
   };
 
+  /**
+   * Handle clicking on a search history item
+   */
   const handleHistoryClick = (query) => {
     setSearchQuery(query);
     setShowSearchHistory(false);
-    setTimeout(() => handleSearch(), 0);
+    // Trigger search with the selected query
+    setTimeout(() => {
+      document.querySelector('button[type="submit"]').click();
+    }, 0);
   };
+
 
   const resetAdvancedFilters = () => {
     setAdvancedFilters({

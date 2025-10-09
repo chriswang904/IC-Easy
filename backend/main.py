@@ -20,6 +20,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 from database import engine, Base
 from sqlalchemy import text
+from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables from .env file
 load_dotenv()

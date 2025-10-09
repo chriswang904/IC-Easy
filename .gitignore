@@ -185,6 +185,7 @@ venv/
 env/
 ENV/
 .venv/
+venv
 
 # .gitignore
 backend/models/desklib_ai_detector_fixed/
