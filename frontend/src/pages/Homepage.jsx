@@ -11,7 +11,9 @@ import {
   Zap,
   FileText,
 } from "lucide-react";
-import { searchLiterature, getErrorMessage } from "../api";
+import { searchLiterature, getErrorMessage, getLatest  } from "../api";
+
+import { getTopicImages } from "../services/image_service";
 
 import Sidebar from "../components/Sidebar";
 export default function Homepage() {
@@ -26,11 +28,117 @@ export default function Homepage() {
   const [searchHistory, setSearchHistory] = useState([]);
   const [showSearchHistory, setShowSearchHistory] = useState(false);
 
+  // Add different pages
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10); 
+  const [totalResults, setTotalResults] = useState(0);
+
+  const [selectedTopic, setSelectedTopic] = useState("ai");
+  const [topicMode, setTopicMode] = useState("latest");
+  const [topicPapers, setTopicPapers] = useState([]);
+  const [loadingTopic, setLoadingTopic] = useState(false);
+
+  const [topicImages, setTopicImages] = useState({});
+
+
   useEffect(() => {
     if (searchPerformed) {
+      setCurrentPage(1);
       handleSearch();
     }
   }, [sortBy, source]);
+
+  // ---------- new effect for topic papers ----------
+  useEffect(() => {
+    if (Object.keys(topicImages).length > 0) {
+      loadTopicPapers(selectedTopic, topicMode);
+    }
+  }, [selectedTopic, topicMode, topicImages]);
+
+  // ---------- load topic papers ----------
+  const loadTopicPapers = async (topicKey, mode) => {
+    setLoadingTopic(true);
+    try {
+      let results = [];
+
+      if (mode === "latest") {
+        const { results: latest } = await getLatest({
+          source: "arxiv",
+          topicKey,
+          limit: 3,
+        });
+        results = latest?.length
+          ? latest
+          : (await getLatest({ source: "openalex", topicKey, limit: 3 })).results;
+      } else {
+        const hot = await searchLiterature({
+          keyword: topics.find((t) => t.id === topicKey)?.name || topicKey,
+          limit: 3,
+          source: "all",
+          sort_by: "citations",
+          filters: null,
+        });
+        results = hot.results || [];
+      }
+
+      const topicItem = topics.find((t) => t.id === topicKey);
+      const topicImagesList = topicImages[topicKey] || [
+        topicItem?.image || "/images/note1.jpg",
+      ];
+
+      const transformed = (results || []).map((paper, i) => ({
+        id: paper.doi || paper.url || `topic-${topicKey}-${i}`,
+        title: paper.title || "Untitled",
+        description: paper.abstract || "No abstract available.",
+        image: topicImagesList[i % topicImagesList.length],
+        metadata:
+          mode === "latest"
+            ? `${paper.published_date?.slice(0, 10) || "N/A"} • Latest`
+            : `${paper.citation_count ?? 0} citations • ${
+                paper.published_date?.slice(0, 4) || "N/A"
+              }`,
+        url: paper.url,
+        source: paper.source,
+        authors: paper.authors?.map((a) => a.name).filter(Boolean) || [],
+        citationCount: paper.citation_count,
+      }));
+
+      setTopicPapers(transformed);
+    } catch (err) {
+      console.error(err);
+      setTopicPapers([]);
+    } finally {
+      setLoadingTopic(false);
+    }
+  };
+
+  
+  useEffect(() => {
+    async function preloadImages() {
+      console.log("preloadImages started");
+      const loaded = {};
+      for (const topic of topics) {
+        console.log(`[Unsplash] Fetching images for: ${topic.name}`);
+        const remote = await getTopicImages(topic.name, 5);
+        console.log(`[Unsplash] ${topic.name} →`, remote);
+        if (remote.length > 0) {
+          loaded[topic.id] = remote;
+        } else {
+          // fallback to local files
+          loaded[topic.id] = [
+            `${topic.image}`,
+            `/images/topics/${topic.id}/1.jpg`,
+            `/images/topics/${topic.id}/2.jpg`,
+            `/images/topics/${topic.id}/3.jpg`,
+          ];
+        }
+      }
+      console.log("Loaded topic images:", loaded);
+      setTopicImages(loaded);
+    }
+    preloadImages();
+  }, []);
+
 
   // Advanced search state
   const [advancedFilters, setAdvancedFilters] = useState({
@@ -43,6 +151,17 @@ export default function Homepage() {
     citationMax: "",
     openAccess: false,
   });
+
+
+  const topics = [
+    { id: "ai",         name: "Artificial Intelligence", image: "/images/topics/ai.jpg",         color: "from-purple-500 to-indigo-500" },
+    { id: "economics",  name: "Economics",               image: "/images/topics/economics.jpg",  color: "from-yellow-400 to-amber-500" },
+    { id: "biology",    name: "Biology",                 image: "/images/topics/biology.jpg",    color: "from-green-500 to-lime-400" },
+    { id: "physics",    name: "Physics",                 image: "/images/topics/physics.jpg",    color: "from-blue-600 to-indigo-600" },
+    { id: "environment",name: "Environment",             image: "/images/topics/environment.jpg",color: "from-emerald-500 to-green-400" },
+    { id: "medicine",   name: "Medicine",                image: "/images/topics/medicine.jpg",   color: "from-rose-500 to-pink-400" },
+  ];
+
 
   const defaultPapers = [
     {
@@ -100,6 +219,40 @@ export default function Homepage() {
     setError(null);
     setSearchPerformed(true);
     setShowSearchHistory(false);
+    setCurrentPage(1);
+
+    // === Determine topic category for images ===
+    const keyword = searchQuery.toLowerCase();
+    let topicKey = "ai"; 
+
+    if (keyword.includes("bio")) topicKey = "biology";
+    else if (keyword.includes("med")) topicKey = "medicine";
+    else if (keyword.includes("eco")) topicKey = "economics";
+    else if (keyword.includes("phys")) topicKey = "physics";
+    else if (keyword.includes("env")) topicKey = "environment";
+    else if (keyword.includes("climate") || keyword.includes("green")) topicKey = "environment";
+    else if (keyword.includes("health")) topicKey = "medicine";
+
+    let topicImagesList =
+      topicImages[topicKey] && topicImages[topicKey].length > 0
+        ? topicImages[topicKey]
+        : [];
+
+    if (topicImagesList.length === 0 && topicImages["ai"]?.length > 0) {
+      topicImagesList = topicImages["ai"];
+    }
+
+    if (topicImagesList.length === 0) {
+      topicImagesList = [
+        "/images/note1.jpg",
+        "/images/note2.jpg",
+        "/images/note3.jpg",
+      ];
+    }
+
+    console.log("[Search] Using topicKey:", topicKey);
+    console.log("[Search] Using topicImagesList:", topicImagesList);
+
 
     try {
       console.log("[Homepage] Searching for:", searchQuery);
@@ -134,7 +287,7 @@ export default function Homepage() {
 
       const result = await searchLiterature({
         keyword: searchQuery,
-        limit: 10,
+        limit: 50,
         source,
         sort_by: sortBy,
         filters: Object.keys(filters).length > 0 ? filters : null,
@@ -142,6 +295,16 @@ export default function Homepage() {
 
       console.log("[Homepage] Search results:", result);
       console.log("[Homepage] Number of results:", result.results?.length || 0);
+
+      console.log("[Homepage] Raw API response:", result);
+      console.log("[Homepage] Number of results:", result.results?.length || 0);
+      
+      if (result.results) {
+        console.log("[Homepage] Paper titles:");
+        result.results.forEach((paper, index) => {
+          console.log(`  [${index}] ${paper.title}`);
+        });
+      }
 
       // Log first result structure if available
       if (result.results && result.results.length > 0) {
@@ -176,7 +339,8 @@ export default function Homepage() {
 
         return {
           id: paper.doi || paper.url || `paper-${index}`,
-          image: "/images/note1.jpg", // Default image
+          // image: "/images/note1.jpg", // Default image
+          image: topicImagesList[index % topicImagesList.length],
           title: paper.title || "Untitled",
           category: paper.journal || paper.source || "Research Paper",
           metadata: `${citationText} • ${year}`,
@@ -192,9 +356,47 @@ export default function Homepage() {
         };
       });
 
-      setPapers(transformedPapers);
 
-      if (transformedPapers.length === 0) {
+      console.log("[Homepage] Transformed papers count:", transformedPapers.length);
+      console.log("[Homepage] Transformed paper titles:");
+      transformedPapers.forEach((paper, index) => {
+        console.log(`  [${index}] ${paper.title.substring(0, 60)}...`);
+      });
+
+
+      const uniquePapers = [];
+      const seenDOIs = new Set();
+      const seenTitles = new Set();
+
+      for (const paper of transformedPapers) {
+
+        if (paper.doi) {
+          if (seenDOIs.has(paper.doi)) {
+            console.log(`[Homepage] Skipping duplicate DOI: ${paper.doi}`);
+            continue;
+          }
+          seenDOIs.add(paper.doi);
+        }
+
+        const normalizedTitle = paper.title.toLowerCase().trim().replace(/[^\w\s]/g, '');
+        if (seenTitles.has(normalizedTitle)) {
+          console.log(`[Homepage] Skipping duplicate title: "${paper.title.substring(0, 50)}..."`);
+          continue;
+        }
+        seenTitles.add(normalizedTitle);
+        
+        uniquePapers.push(paper);
+      }
+
+      console.log(`[Homepage] After deduplication: ${transformedPapers.length} → ${uniquePapers.length} unique papers`);
+
+      const uniqueTitles = new Set(uniquePapers.map(p => p.title));
+      console.log("[Homepage] Unique titles count:", uniqueTitles.size);
+
+      setPapers(uniquePapers); 
+      setTotalResults(uniquePapers.length);
+
+      if (uniquePapers.length === 0) {
         setError("No results found. Try different keywords.");
       }
     } catch (err) {
@@ -209,6 +411,7 @@ export default function Homepage() {
 
       setError(errorMessage);
       setPapers([]);
+      setTotalResults(0);
     } finally {
       setLoading(false);
     }
@@ -270,7 +473,81 @@ export default function Homepage() {
     }
   );
 
-  const displayPapers = searchPerformed ? papers : defaultPapers;
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = papers.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(papers.length / itemsPerPage);
+
+  const handlePageChange = (pageNumber) => {
+    setCurrentPage(pageNumber);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const displayPapers = searchPerformed
+  ? currentItems
+  : topicPapers.length > 0
+    ? topicPapers
+    : defaultPapers;
+
+  const handleTopicClick = async (topicKey) => {
+    const topic = topics.find(t => t.id === topicKey);
+
+    setSearchQuery(topic?.name || topicKey);
+    setLoading(true);
+    setSearchPerformed(true);
+    setError(null);
+    setShowSearchHistory(false);
+    setCurrentPage(1);
+
+    try {
+      let results = [];
+
+      if (topicMode === 'latest') {
+        const { results: latest } = await getLatest({ source: "arxiv", topicKey, limit: 3 });
+        results = latest;
+        if (!results || results.length === 0) {
+          const fallback = await getLatest({ source: "openalex", topicKey, limit: 3 });
+          results = fallback.results || [];
+        }
+      } else {
+
+        const hot = await searchLiterature({
+          keyword: topic?.name || topicKey,
+          limit: 3,
+          source: "all",
+          sort_by: "citations",
+          filters: null,
+        });
+        results = hot.results || [];
+      }
+
+      const topicImagesList = topicImages[topicKey] || [topic.image];
+
+      const transformed = (results || []).map((paper, i) => ({
+        id: paper.doi || paper.url || `topic-${topicKey}-${i}`,
+        title: paper.title || "Untitled",
+        description: paper.abstract || "No abstract available.",
+        metadata:
+          topicMode === 'latest'
+            ? `${paper.published_date?.slice(0,10) || "N/A"} • Latest`
+            : `${paper.citation_count ?? 0} citations • ${paper.published_date?.slice(0,4) || "N/A"}`,
+        url: paper.url,
+        image: topicImagesList[i % topicImagesList.length],
+        category: topic?.name || topicKey,
+        source: paper.source,
+        authors: paper.authors?.map(a => a.name).filter(Boolean) || [],
+        citationCount: paper.citation_count,
+        doi: paper.doi,
+      }));
+
+      setPapers(transformed);
+    } catch (err) {
+      setError(getErrorMessage?.(err) || "Failed to load topic papers.");
+      setPapers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
@@ -639,7 +916,6 @@ export default function Homepage() {
                 </div>
               </section>
             )}
-
             {loading && (
               <div className="flex items-center justify-center py-12">
                 <div className="text-center">
@@ -648,6 +924,47 @@ export default function Homepage() {
                 </div>
               </div>
             )}
+
+            {/* === Topic Selector (controls only, not list) === */}
+            {!searchPerformed && (
+              <div className="flex flex-wrap items-center gap-4 mt-6 mb-4">
+                <select
+                  className="border rounded-lg px-3 py-2 text-gray-700 focus:ring-2 focus:ring-purple-500"
+                  value={selectedTopic}
+                  onChange={(e) => setSelectedTopic(e.target.value)}
+                >
+                  {topics.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+
+                <div className="flex gap-2">
+                  <button
+                    className={`px-3 py-1 rounded-full border ${
+                      topicMode === "latest"
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                    onClick={() => setTopicMode("latest")}
+                  >
+                    Latest
+                  </button>
+                  <button
+                    className={`px-3 py-1 rounded-full border ${
+                      topicMode === "citations"
+                        ? "bg-purple-600 text-white border-purple-600"
+                        : "bg-white text-gray-700 border-gray-300"
+                    }`}
+                    onClick={() => setTopicMode("citations")}
+                  >
+                    Most Cited
+                  </button>
+                </div>
+              </div>
+            )}
+
 
             {!loading && (
               <section className="space-y-4 mt-8">
@@ -734,6 +1051,66 @@ export default function Homepage() {
                 ))}
               </section>
             )}
+            {searchPerformed && papers.length > 0 && (
+              <div className="mt-8 flex items-center justify-between border-t border-gray-200 pt-6">
+                {/* result info */}
+                <div className="text-sm text-gray-600">
+                  Showing <span className="font-medium">{indexOfFirstItem + 1}</span> to{" "}
+                  <span className="font-medium">
+                    {Math.min(indexOfLastItem, papers.length)}
+                  </span>{" "}
+                  of <span className="font-medium">{papers.length}</span> results
+                </div>
+
+                {/* page button */}
+                <div className="flex items-center gap-2">
+                  {/* upper page */}
+                  <button
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    Previous
+                  </button>
+
+                  {/* index */}
+                  <div className="flex gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((page) => {
+                        if (page === 1 || page === totalPages) return true;
+                        if (page >= currentPage - 1 && page <= currentPage + 1) return true;
+                        return false;
+                      })
+                      .map((page, index, array) => (
+                        <React.Fragment key={page}>
+                          {index > 0 && page - array[index - 1] > 1 && (
+                            <span className="px-3 py-2 text-gray-500">...</span>
+                          )}
+                          <button
+                            onClick={() => handlePageChange(page)}
+                            className={`px-3 py-2 text-sm font-medium rounded-lg transition ${
+                              currentPage === page
+                                ? "bg-purple-600 text-white"
+                                : "text-gray-700 bg-white border border-gray-300 hover:bg-gray-50"
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        </React.Fragment>
+                      ))}
+                  </div>
+
+                  {/* next page */}
+                  <button
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )} 
           </article>
         </div>
       </div>

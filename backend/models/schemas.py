@@ -57,7 +57,7 @@ class AdvancedSearchFilters(BaseModel):
 class LiteratureAdvancedSearchRequest(BaseModel):
     """Advanced search request"""
     keyword: str = Field(..., min_length=1, max_length=500)
-    limit: int = Field(10, ge=1, le=50)
+    limit: int = Field(10, ge=1, le=300)
     source: str = Field("all", pattern="^(all|crossref|arxiv|openalex)$")
     sort_by: str = Field("relevance", pattern="^(relevance|year|citations)$")
     filters: Optional[AdvancedSearchFilters] = None

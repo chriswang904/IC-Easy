@@ -32,12 +32,20 @@ router = APIRouter(prefix="/api/literature", tags=["Literature"])
 # Initialize aggregator
 literature_aggregator = LiteratureAggregator()
 
-
 # Initialize services
 crossref_service = CrossRefService()
 arxiv_service = ArXivService()
 openalex_service = OpenAlexService()
 reference_formatter = ReferenceFormatter()
+
+TOPIC_TO_ARXIV = {
+    "ai": "cs.AI",
+    "economics": "econ.EM",
+    "biology": "q-bio.BM",
+    "physics": "physics.gen-ph",
+    "environment": "physics.ao-ph",
+    "medicine": "q-bio.TO",
+}
 
 @router.post("/search", response_model=LiteratureSearchResponse)
 async def search_literature(request: LiteratureSearchRequest):
@@ -377,4 +385,35 @@ async def export_ris_format(literature_list: List[LiteratureItem]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+
+@router.get("/latest")
+def get_latest(
+    source: str = Query("arxiv", description='arxiv | openalex'),
+    topic_key: str = Query(..., description='e.g., ai, economics, biology'),
+    limit: int = Query(3, ge=1, le=50),
+):
+    topic_key = topic_key.lower().strip()
+    if source not in ("arxiv", "openalex"):
+        raise HTTPException(status_code=400, detail="source must be 'arxiv' or 'openalex'")
+
+    if source == "arxiv":
+        cat = TOPIC_TO_ARXIV.get(topic_key)
+        if not cat:
+            raise HTTPException(status_code=400, detail=f"Unknown topic_key: {topic_key}")
+        items = arxiv_service.latest_by_category(cat, limit=limit)
+
+        return {"results": [i.dict() for i in items], "source": "arxiv"}
+
+    # source == "openalex"
+    keyword = {
+        "ai": "artificial intelligence",
+        "economics": "economics",
+        "biology": "biology",
+        "physics": "physics",
+        "environment": "environmental science",
+        "medicine": "medicine",
+    }.get(topic_key, topic_key)
+
+    items = openalex_service.search_literature(keyword=keyword, limit=limit, sort_by="year")
+    return {"results": [i.dict() for i in items], "source": "openalex"}
 

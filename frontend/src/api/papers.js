@@ -193,3 +193,10 @@ export const getRecommendations = async (paperId, limit = 5) => {
     throw error;
   }
 };
+
+export const getLatest = async ({ source = 'arxiv', topicKey, limit = 3 }) => {
+  const { data } = await apiClient.get('/api/literature/latest', {
+    params: { source, topic_key: topicKey, limit },
+  });
+  return data;
+};

@@ -52,6 +52,29 @@ class CrossRefService:
             for item in items:
                 literature_items.append(self._parse_crossref_item(item))
             
+            seen_dois = set()
+            seen_titles = set()
+            unique_items = []
+
+            for item in literature_items:
+
+                if item.doi:
+                    if item.doi in seen_dois:
+                        logger.debug(f"[CrossRef] Skipping duplicate DOI: {item.doi}")
+                        continue
+                    seen_dois.add(item.doi)
+ 
+                else:
+                    normalized_title = item.title.lower().strip()[:100]
+                    if normalized_title in seen_titles:
+                        logger.debug(f"[CrossRef] Skipping duplicate title: {item.title[:50]}...")
+                        continue
+                    seen_titles.add(normalized_title)
+                
+                unique_items.append(item)
+            
+            logger.info(f"[CrossRef] Deduplication: {len(literature_items)} → {len(unique_items)} unique papers")
+
             # Manual sorting (CrossRef doesn't support sort param)
             if sort_by == "year":
                 literature_items.sort(

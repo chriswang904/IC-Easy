@@ -5,6 +5,7 @@ from typing import List, Optional
 from models.schemas import LiteratureItem, Author
 from datetime import datetime
 import html
+import xml.etree.ElementTree as ET
 
 class ArXivService:
     """Service for interacting with arXiv API"""
@@ -144,3 +145,24 @@ class ArXivService:
             citation_count=None,  # arXiv doesn't provide citation counts
             source="arxiv"
         )
+    
+    def latest_by_category(self, category_code: str, limit: int = 3):
+        """
+        Fetch latest papers from arXiv by primary category, sorted by lastUpdatedDate (desc).
+        Example: category_code="cs.AI"
+        """
+        try:
+            params = {
+                "search_query": f"cat:{category_code}",
+                "start": 0,
+                "max_results": limit,
+                "sortBy": "lastUpdatedDate",
+                "sortOrder": "descending",
+            }
+            response = self.session.get(self.BASE_URL, params=params, timeout=15)
+            response.raise_for_status()
+            feed = feedparser.parse(response.content)
+            return [self._parse_arxiv_entry(entry) for entry in feed.entries]
+        except Exception as e:
+            print(f"[ArXivService] latest_by_category error: {e}")
+            return []
