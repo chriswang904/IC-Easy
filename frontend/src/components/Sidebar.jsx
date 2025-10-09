@@ -8,6 +8,7 @@ import {
   Sparkles,
   User,
   LogOut,
+  Origami,
 } from "lucide-react";
 
 function Sidebar() {
@@ -69,6 +70,7 @@ function Sidebar() {
     { icon: Sparkles, label: "AITool", path: "/aitool" },
     { icon: Archive, label: "Collections", path: "/collections" },
     { icon: Globe, label: "Explore", path: "/explore" },
+    { icon: Origami, label: "Polish", path: "/polish" },
   ];
 
   const UserAvatar = ({ size = "w-8 h-8" }) => {

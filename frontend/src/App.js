@@ -7,8 +7,10 @@ import AIToolPage from "./pages/AIToolPage";
 import RecentPage from "./pages/RecentPage";
 import History from "./pages/History";
 import Login from "./pages/Login";
-import Sidebar from "./components/Sidebar"; 
+import Sidebar from "./components/Sidebar";
 import PlagiarismResultPage from "./pages/PlagiarismResultPage";
+import SummarizeResultPage from "./pages/SummarizeResultPage";
+import PolishPage from "./pages/PolishPage";
 
 function App() {
   return (
@@ -26,6 +28,8 @@ function App() {
           <Route path="/recent" element={<RecentPage />} />
           <Route path="/history" element={<History />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/summarize-result" element={<SummarizeResultPage />} />
+          <Route path="/polish" element={<PolishPage />} />
         </Routes>
       </div>
     </BrowserRouter>
