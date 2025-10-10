@@ -33,15 +33,35 @@ export {
 } from './history';
 
 export const getErrorMessage = (error) => {
-  if (error.response?.data?.detail) {
-    return error.response.data.detail;
+  // Handle Pydantic validation errors (array format)
+  if (error.response?.data?.detail && Array.isArray(error.response.data.detail)) {
+    return error.response.data.detail
+      .map(err => {
+        const field = err.loc?.join(' > ') || 'Field';
+        return `${field}: ${err.msg}`;
+      })
+      .join(', ');
   }
+  
+  // Handle standard error detail
+  if (error.response?.data?.detail) {
+    if (typeof error.response.data.detail === 'string') {
+      return error.response.data.detail;
+    }
+    if (typeof error.response.data.detail === 'object') {
+      return error.response.data.detail.msg || JSON.stringify(error.response.data.detail);
+    }
+  }
+  
+  // Handle other error formats
   if (error.response?.data?.error) {
     return error.response.data.error;
   }
+  
   if (error.message) {
     return error.message;
   }
+  
   return 'An unexpected error occurred';
 };
 

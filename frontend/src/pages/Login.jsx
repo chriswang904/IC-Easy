@@ -97,7 +97,32 @@ export default function Login() {
       // Redirect to homepage on success
       navigate('/');
     } catch (err) {
-      setError(getErrorMessage(err));
+      console.error('[Login] Error:', err);
+      
+      let errorMessage = 'An error occurred';
+      
+      if (err.response?.data?.detail) {
+        // FastAPI 
+        const detail = err.response.data.detail;
+        
+        if (Array.isArray(detail)) {
+          // Pydantic 
+          errorMessage = detail.map(error => {
+            const field = error.loc?.join(' > ') || 'Field';
+            return `${field}: ${error.msg}`;
+          }).join(', ');
+        } else if (typeof detail === 'string') {
+          // String
+          errorMessage = detail;
+        } else if (typeof detail === 'object') {
+          // Object
+          errorMessage = detail.msg || JSON.stringify(detail);
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -122,13 +147,6 @@ export default function Login() {
       setError('Google login failed. Please try again.');
       setLoading(false);
     }
-  };
-
-  const getErrorMessage = (error) => {
-    if (error.response?.data?.detail) {
-      return error.response.data.detail;
-    }
-    return error.message || 'An error occurred';
   };
 
   const handleChange = (e) => {
