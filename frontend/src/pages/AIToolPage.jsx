@@ -432,7 +432,7 @@ export default function AIToolPage() {
                   ✨ Powered by Winston AI
                 </div>
                 <h1 className="text-5xl font-bold text-white mb-3 tracking-tight">
-                  AI Research Tools
+                  Check & Summarize Smarter
                 </h1>
                 <p className="text-purple-100 text-lg max-w-2xl">
                   Upload your document for instant plagiarism and AI content
@@ -523,7 +523,7 @@ export default function AIToolPage() {
                     <ul className="text-sm text-blue-700 space-y-1">
                       <li>
                         • <strong>AI Content Detection:</strong> Ensemble model
-                        (Desklib)
+                        (Winston AI)
                       </li>
                       <li>
                         • <strong>Supported formats:</strong> TXT, DOCX, PDF (up
@@ -544,10 +544,7 @@ export default function AIToolPage() {
                         • <strong>Smart Summarization:</strong> Automatically
                         uses the best available method
                       </li>
-                      <li>
-                        • <strong>Priority:</strong> Chrome AI → Fallback
-                        Algorithm
-                      </li>
+
                       <li>
                         • <strong>Supported formats:</strong> .txt and .docx
                         files (up to 10MB)
@@ -557,24 +554,6 @@ export default function AIToolPage() {
                         Canary with flags enabled
                       </li>
                     </ul>
-                    <div className="mt-3 pt-3 border-t border-blue-300">
-                      <p className="text-xs text-blue-600">
-                        <strong>API Status:</strong>{" "}
-                        {typeof window !== "undefined" && "Summarizer" in window
-                          ? "Summarizer API detected"
-                          : "Summarizer API not available"}
-                        {/* {" | "}
-                        {typeof window !== "undefined" &&
-                        "AILanguageModel" in window
-                          ? "Prompt API detected"
-                          : "Prompt API not available"} */}
-                      </p>
-                      <p className="text-xs text-blue-600 mt-1">
-                        <strong>Browser:</strong> Chrome{" "}
-                        {navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] ||
-                          "Unknown"}
-                      </p>
-                    </div>
                   </div>
                 )}
 

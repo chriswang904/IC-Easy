@@ -67,7 +67,7 @@ function Sidebar() {
   };
 
   const navigationItems = [
-    { icon: Sparkles, label: "AITool", path: "/aitool" },
+    { icon: Sparkles, label: "TextLab", path: "/aitool" },
     { icon: Archive, label: "Collections", path: "/collections" },
     { icon: Globe, label: "Explore", path: "/explore" },
     { icon: Origami, label: "Polish", path: "/polish" },
@@ -108,21 +108,21 @@ function Sidebar() {
         <button
           onClick={() => {
             console.log("[Sidebar] Logo clicked - resetting to homepage");
-            navigate("/", { replace: false }); 
-            window.dispatchEvent(new Event('reset-search'));
+            navigate("/", { replace: false });
+            window.dispatchEvent(new Event("reset-search"));
           }}
           className="p-2 hover:bg-white/50 rounded-2xl transition-all duration-300 hover:scale-110 relative z-10 cursor-pointer"
           aria-label="Go to homepage"
           type="button"
         >
-          <img 
-            src="/IC_EASY_LOGO.webp" 
-            alt="IC-Easy Logo" 
-            className="w-20 h-20 object-contain"
-            style={{ 
-              imageRendering: '-webkit-optimize-contrast',
-              transform: 'translateZ(0)',
-              backfaceVisibility: 'hidden'
+          <img
+            src="/IC_EASY_LOGO.webp"
+            alt="IC-Easy Logo"
+            className="w-12 h-12 object-contain"
+            style={{
+              imageRendering: "-webkit-optimize-contrast",
+              transform: "translateZ(0)",
+              backfaceVisibility: "hidden",
             }}
           />
         </button>
