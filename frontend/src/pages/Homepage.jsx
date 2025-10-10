@@ -1,5 +1,5 @@
 // src/pages/Homepage.jsx
-import React from "react";
+import React, { useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import SearchBar from "../components/search/SearchBar";
 import SearchFilters from "../components/search/SearchFilters";
@@ -45,7 +45,21 @@ export default function Homepage() {
     resetAdvancedFilters,
     hasActiveFilters,
     totalResults,
+    resetSearch,
   } = useSearch(topicImages);
+
+  useEffect(() => {
+    const handleResetSearch = () => {
+      console.log("[Homepage] Logo clicked - resetting to initial page");
+      resetSearch();
+    };
+
+    window.addEventListener("reset-search", handleResetSearch);
+
+    return () => {
+      window.removeEventListener("reset-search", handleResetSearch);
+    };
+  }, [resetSearch]);
 
   // Topic papers functionality
   const {

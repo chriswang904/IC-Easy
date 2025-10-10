@@ -146,6 +146,20 @@ export function useSearch(topicImages) {
     }
   );
 
+  const resetSearch = () => {
+    console.log("[useSearch] Resetting search, keeping history");
+    setSearchQuery("");
+    setPapers([]);
+    setSearchPerformed(false);
+    setError(null);
+    setTotalResults(0);
+    setSortBy("relevance");
+    setSource("all");
+    setShowSearchHistory(false);
+    setShowAdvancedSearch(false);
+    resetAdvancedFilters();
+  };
+
   return {
     searchQuery,
     setSearchQuery,
@@ -172,5 +186,6 @@ export function useSearch(topicImages) {
     resetAdvancedFilters,
     hasActiveFilters,
     totalResults,
+    resetSearch,
   };
 }
