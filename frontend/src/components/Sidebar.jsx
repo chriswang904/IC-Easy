@@ -1,7 +1,7 @@
+// src/components/Sidebar.jsx
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Menu,
   Edit,
   Archive,
   Globe,
@@ -104,14 +104,30 @@ function Sidebar() {
       aria-label="Main navigation"
     >
       <div className="flex flex-col items-center gap-1">
+        {/* Logo Button */}
         <button
-          onClick={() => navigate("/")}
-          className="p-4 hover:bg-white/50 rounded-2xl transition"
+          onClick={() => {
+            console.log("[Sidebar] Logo clicked - resetting to homepage");
+            navigate("/", { replace: false }); 
+            window.dispatchEvent(new Event('reset-search'));
+          }}
+          className="p-2 hover:bg-white/50 rounded-2xl transition-all duration-300 hover:scale-110 relative z-10 cursor-pointer"
           aria-label="Go to homepage"
+          type="button"
         >
-          <Menu className="w-6 h-6 text-gray-700" />
+          <img 
+            src="/IC_EASY_LOGO.webp" 
+            alt="IC-Easy Logo" 
+            className="w-20 h-20 object-contain"
+            style={{ 
+              imageRendering: '-webkit-optimize-contrast',
+              transform: 'translateZ(0)',
+              backfaceVisibility: 'hidden'
+            }}
+          />
         </button>
 
+        {/* Create New Essay Button */}
         <button
           onClick={() => navigate("/essay/new")}
           className="p-4 bg-purple-300 rounded-2xl"
@@ -122,6 +138,7 @@ function Sidebar() {
         </button>
       </div>
 
+      {/* Navigation Items */}
       <div className="flex flex-col items-center gap-4 w-full mt-8">
         {navigationItems.map((item, index) => (
           <button
@@ -138,6 +155,7 @@ function Sidebar() {
         ))}
       </div>
 
+      {/* User Section */}
       <div className="mt-auto">
         {user ? (
           <div
@@ -146,7 +164,6 @@ function Sidebar() {
             onMouseLeave={handleMouseLeave}
           >
             <button className="flex flex-col items-center gap-1 p-2 hover:bg-white/30 rounded-lg transition">
-              {/* UserAvatar*/}
               <UserAvatar />
               <span className="text-xs text-gray-600 truncate max-w-[60px]">
                 {user.username}
@@ -156,7 +173,6 @@ function Sidebar() {
             {showUserMenu && (
               <div className="absolute bottom-0 left-full ml-2 bg-white shadow-xl rounded-lg p-3 w-48 border border-gray-200 z-50">
                 <div className="flex items-center gap-2 mb-3 pb-3 border-b">
-                  {/* UserAvatar  */}
                   <UserAvatar size="w-10 h-10" />
                   <div className="flex-1 min-w-0">
                     <p

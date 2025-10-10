@@ -1,55 +1,109 @@
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { Menu, Edit, Star, Clock, BookOpen } from "lucide-react";
+// src/components/search/SearchBar.jsx
+import React from 'react';
+import { Clock, SlidersHorizontal, Search, Loader } from 'lucide-react';
+import SearchHistory from './SearchHistory';
+import AdvancedSearch from './AdvancedSearch';
 
-function Sidebar() {
-  const navigate = useNavigate();
+export default function SearchBar({
+  searchQuery,
+  setSearchQuery,
+  handleSearch,
+  handleSearchChange,
+  loading,
+  searchHistory,
+  showSearchHistory,
+  setShowSearchHistory,
+  showAdvancedSearch,
+  setShowAdvancedSearch,
+  advancedFilters,
+  setAdvancedFilters,
+  resetAdvancedFilters,
+  hasActiveFilters,
+}) {
+  const handleHistoryClick = (query) => {
+    setSearchQuery(query);
+    setShowSearchHistory(false);
+    setTimeout(() => {
+      handleSearch();
+    }, 100);
+  };
 
-  const navigationItems = [
-    { icon: Star, label: "Starred" },
-    { icon: Clock, label: "Recent" },
-    { icon: BookOpen, label: "Collections" },
-  ];
+  const handleClearHistory = () => {
+    setShowSearchHistory(false);
+  };
 
   return (
-    <nav
-      className="flex flex-col w-20 items-center gap-10 pt-11 pb-14 px-0 bg-gradient-to-b from-purple-100 to-pink-100"
-      aria-label="Main navigation"
-    >
-      <div className="flex flex-col items-center gap-1">
+    <div className="relative">
+      <div className="mb-6 bg-purple-50 rounded-3xl p-1 flex items-center max-w-2xl">
         <button
-          className="p-4 hover:bg-white/50 rounded-2xl transition"
-          aria-label="Menu"
+          type="button"
+          onClick={() => setShowSearchHistory(!showSearchHistory)}
+          className="p-3 hover:bg-white/50 rounded-full"
+          aria-label="Recent"
         >
-          <Menu className="w-6 h-6 text-gray-700" />
+          <Clock className="w-6 h-6 text-gray-600" />
         </button>
-
+        <input
+          type="search"
+          placeholder="Search papers, topics, or authors..."
+          value={searchQuery}
+          onChange={handleSearchChange}
+          onFocus={() =>
+            searchHistory.length > 0 && setShowSearchHistory(true)
+          }
+          onKeyPress={(e) => e.key === "Enter" && handleSearch()}
+          className="flex-1 bg-transparent px-4 py-2 outline-none text-gray-700"
+          aria-label="Search"
+          disabled={loading}
+        />
         <button
-          onClick={() => navigate("/essay/new")}
-          className="p-4 bg-purple-300 rounded-2xl"
-          aria-label="Active view"
-          aria-current="Edit"
+          type="button"
+          onClick={() => setShowAdvancedSearch(!showAdvancedSearch)}
+          className={`p-3 hover:bg-white/50 rounded-full relative ${
+            hasActiveFilters ? "bg-purple-200" : ""
+          }`}
+          aria-label="Advanced Search"
+          title="Advanced Search"
         >
-          <Edit size={24} />
+          <SlidersHorizontal className="w-6 h-6 text-gray-600" />
+          {hasActiveFilters && (
+            <span className="absolute top-1 right-1 w-2 h-2 bg-purple-600 rounded-full"></span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={handleSearch}
+          className="p-3 hover:bg-white/50 rounded-full disabled:opacity-50"
+          aria-label="Search"
+          disabled={loading}
+        >
+          {loading ? (
+            <Loader className="w-6 h-6 text-gray-600 animate-spin" />
+          ) : (
+            <Search className="w-6 h-6 text-gray-600" />
+          )}
         </button>
       </div>
 
-      <div className="flex flex-col items-center gap-4 w-full">
-        {navigationItems.map((item, index) => (
-          <button
-            key={index}
-            className="flex flex-col items-center justify-center gap-1 px-0 py-1.5 w-full hover:bg-white/30 rounded-lg transition"
-            aria-label={item.label}
-          >
-            <div className="p-2">
-              <item.icon className="w-6 h-6 text-gray-700" />
-            </div>
-            <span className="text-xs text-gray-600">{item.label}</span>
-          </button>
-        ))}
-      </div>
-    </nav>
+      {/* Search History Dropdown */}
+      {showSearchHistory && searchHistory.length > 0 && (
+        <SearchHistory
+          searchHistory={searchHistory}
+          onHistoryClick={handleHistoryClick}
+          onClearAll={handleClearHistory}
+        />
+      )}
+
+      {/* Advanced Search Panel */}
+      {showAdvancedSearch && (
+        <AdvancedSearch
+          advancedFilters={advancedFilters}
+          setAdvancedFilters={setAdvancedFilters}
+          onClose={() => setShowAdvancedSearch(false)}
+          onApply={handleSearch}
+          onReset={resetAdvancedFilters}
+        />
+      )}
+    </div>
   );
 }
-
-export default Sidebar;
