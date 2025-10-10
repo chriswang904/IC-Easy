@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 class OpenAlexService:
     """Service for interacting with OpenAlex API"""
 
-    BASE_URL = "https://api.openalex.org/works"
+    BASE_URL = "https://api.openalex.org/works" 
 
     def __init__(self):
         self.session = requests.Session()
@@ -19,25 +19,32 @@ class OpenAlexService:
     def search_literature(self, keyword: str, limit: int = 10, sort_by: str = "relevance") -> List[LiteratureItem]:
         """Search literature using OpenAlex API"""
         try:
-            # Build params WITHOUT mailto
+
+            sort_param = None
+            if sort_by == "year":
+                sort_param = "publication_year:desc"
+            elif sort_by == "citations":
+                sort_param = "cited_by_count:desc" 
+
             params = {
                 "search": keyword,
-                "per_page": min(limit, 50),
+                "per-page": limit,
             }
             
-            # Add sort parameter if needed
-            if sort_by == "year":
-                params["sort"] = "publication_year:desc"
-            elif sort_by == "citations":
-                params["sort"] = "cited_by_count:desc"
+            if sort_param:
+                params["sort"] = sort_param
 
-            logger.info(f"[OpenAlex] Searching keyword='{keyword}'")
+            logger.info(f"[OpenAlex] Searching keyword='{keyword}', sort_by='{sort_by}', params={params}")
             
-            response = self.session.get(self.BASE_URL, params=params, timeout=10)
-            
-            logger.info(f"[OpenAlex] Response status: {response.status_code}")
+            response = self.session.get(
+                self.BASE_URL, 
+                params=params,
+                timeout=30
+            )
             
             response.raise_for_status()
+            
+            logger.info(f"[OpenAlex] Response status: {response.status_code}")
 
             data = response.json()
             results = data.get("results", [])
@@ -58,6 +65,13 @@ class OpenAlexService:
                     parsed_results.append(parsed)
             
             logger.info(f"[OpenAlex] Returning {len(parsed_results)} valid results (filtered from {len(results)})")
+            
+            if sort_by == "citations":
+                parsed_results.sort(
+                    key=lambda x: x.citation_count if x.citation_count is not None else 0, 
+                    reverse=True
+                )
+                logger.info(f"[OpenAlex] Applied client-side sorting by citations")
             
             return parsed_results
 
@@ -113,10 +127,22 @@ class OpenAlexService:
             source = primary_location.get("source") if primary_location else None
             journal = source.get("display_name") if source else None
 
+            raw_abstract = self._reconstruct_abstract(work.get("abstract_inverted_index"))
+            cleaned_abstract = None
+            
+            if raw_abstract:
+
+                cleaned_abstract = html.unescape(raw_abstract)
+                cleaned_abstract = re.sub(r'<[^>]+>', '', cleaned_abstract)
+                cleaned_abstract = ' '.join(cleaned_abstract.split())
+                
+                if len(cleaned_abstract) < 10:
+                    cleaned_abstract = None
+
             return LiteratureItem(
                 title=title,
                 authors=authors if authors else [Author(name="Unknown Author")],
-                abstract=self._reconstruct_abstract(work.get("abstract_inverted_index")),
+                abstract=cleaned_abstract, 
                 doi=doi,
                 url=work.get("id"),
                 published_date=pub_date,
@@ -141,6 +167,14 @@ class OpenAlexService:
             
             sorted_words = [word for _, word in sorted(word_positions)]
             abstract = " ".join(sorted_words)
+            
+            abstract = re.sub(r'<[^>]+>', '', abstract)
+            abstract = html.unescape(abstract)
+            abstract = re.sub(r'^abstract\s+', '', abstract, flags=re.IGNORECASE)
+            abstract = ' '.join(abstract.split())
+            
+            if len(abstract) < 20:
+                return None
             
             if len(abstract) > 5000:
                 abstract = abstract[:5000] + "..."

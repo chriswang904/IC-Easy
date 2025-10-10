@@ -561,13 +561,13 @@ export default function AIToolPage() {
                       <p className="text-xs text-blue-600">
                         <strong>API Status:</strong>{" "}
                         {typeof window !== "undefined" && "Summarizer" in window
-                          ? "✅ Summarizer API detected"
-                          : "❌ Summarizer API not available"}
+                          ? "Summarizer API detected"
+                          : "Summarizer API not available"}
                         {/* {" | "}
                         {typeof window !== "undefined" &&
                         "AILanguageModel" in window
-                          ? "✅ Prompt API detected"
-                          : "❌ Prompt API not available"} */}
+                          ? "Prompt API detected"
+                          : "Prompt API not available"} */}
                       </p>
                       <p className="text-xs text-blue-600 mt-1">
                         <strong>Browser:</strong> Chrome{" "}

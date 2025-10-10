@@ -385,24 +385,36 @@ async def export_ris_format(literature_list: List[LiteratureItem]):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-
 @router.get("/latest")
 def get_latest(
     source: str = Query("arxiv", description='arxiv | openalex'),
     topic_key: str = Query(..., description='e.g., ai, economics, biology'),
     limit: int = Query(3, ge=1, le=50),
+    mode: str = Query("latest", description='latest | citations'), 
 ):
     topic_key = topic_key.lower().strip()
     if source not in ("arxiv", "openalex"):
         raise HTTPException(status_code=400, detail="source must be 'arxiv' or 'openalex'")
 
+    fetch_limit = limit * 3
+
     if source == "arxiv":
         cat = TOPIC_TO_ARXIV.get(topic_key)
         if not cat:
             raise HTTPException(status_code=400, detail=f"Unknown topic_key: {topic_key}")
-        items = arxiv_service.latest_by_category(cat, limit=limit)
-
-        return {"results": [i.dict() for i in items], "source": "arxiv"}
+        items = arxiv_service.latest_by_category(cat, limit=fetch_limit)
+        
+        items_dict = [i.dict() for i in items]
+        items_dict = filter_valid_papers(items_dict)
+        
+        if mode == "citations":
+            items_dict.sort(key=lambda x: x.get('citation_count', 0) or 0, reverse=True)
+        
+        items_dict = items_dict[:limit]
+        
+        logger.info(f"[Latest] Returned {len(items_dict)} valid papers for topic '{topic_key}' (mode={mode})")
+        
+        return {"results": items_dict, "source": "arxiv"}
 
     # source == "openalex"
     keyword = {
@@ -414,6 +426,54 @@ def get_latest(
         "medicine": "medicine",
     }.get(topic_key, topic_key)
 
-    items = openalex_service.search_literature(keyword=keyword, limit=limit, sort_by="year")
-    return {"results": [i.dict() for i in items], "source": "openalex"}
+    sort_by = "citations" if mode == "citations" else "year"
+    
+    logger.info(f"[Latest] Fetching from OpenAlex - keyword='{keyword}', mode='{mode}', sort_by='{sort_by}'")
+    
+    items = openalex_service.search_literature(
+        keyword=keyword, 
+        limit=fetch_limit, 
+        sort_by=sort_by 
+    )
+    
+    items_dict = [i.dict() for i in items]
+    items_dict = filter_valid_papers(items_dict)
+    
+    if mode == "citations":
+        items_dict.sort(key=lambda x: x.get('citation_count', 0) or 0, reverse=True)
+    elif mode == "latest":
+        items_dict.sort(key=lambda x: x.get('published_date', ''), reverse=True)
+    
+    items_dict = items_dict[:limit]
+    
+    logger.info(f"[Latest] Returned {len(items_dict)} valid papers for topic '{topic_key}' (mode={mode})")
+    
+    return {"results": items_dict, "source": "openalex"}
+
+
+def filter_valid_papers(papers):
+    today = datetime.now()
+    valid_papers = []
+    
+    for paper in papers:
+        pub_date = paper.get('published_date')
+        if pub_date:
+            try:
+                if 'T' in pub_date:
+                    paper_date = datetime.fromisoformat(pub_date.replace('Z', '+00:00'))
+                else:
+                    paper_date = datetime.strptime(pub_date, '%Y-%m-%d')
+                
+                if paper_date.date() <= today.date():
+                    valid_papers.append(paper)
+                else:
+                    logger.info(f"[Filter] Skipping future date paper: {paper.get('title')} ({pub_date})")
+            except Exception as e:
+                logger.warning(f"[Filter] Date parse error for {paper.get('title')}: {e}")
+                valid_papers.append(paper)
+        else:
+            valid_papers.append(paper)
+    
+    return valid_papers
+
 

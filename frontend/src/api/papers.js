@@ -14,7 +14,7 @@ import apiClient from './client';
  */
 export const searchLiterature = async ({ 
   keyword, 
-  limit = 10, 
+  limit = 15, 
   source = 'crossref', 
   sort_by = 'relevance', 
   filters = null 
@@ -194,9 +194,14 @@ export const getRecommendations = async (paperId, limit = 5) => {
   }
 };
 
-export const getLatest = async ({ source = 'arxiv', topicKey, limit = 3 }) => {
-  const { data } = await apiClient.get('/api/literature/latest', {
-    params: { source, topic_key: topicKey, limit },
+export const getLatest = async ({ source, topicKey, limit, mode = 'latest' }) => {
+  const response = await apiClient.get('/api/literature/latest', {
+    params: {
+      source,
+      topic_key: topicKey,
+      limit,
+      mode, 
+    },
   });
-  return data;
+  return response.data;
 };

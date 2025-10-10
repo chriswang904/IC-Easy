@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef  } from "react";
 import {
   Search,
   Star,
@@ -40,6 +40,8 @@ export default function Homepage() {
 
   const [topicImages, setTopicImages] = useState({});
 
+  const debounceTimer = useRef(null);
+
 
   useEffect(() => {
     if (searchPerformed) {
@@ -55,31 +57,39 @@ export default function Homepage() {
     }
   }, [selectedTopic, topicMode, topicImages]);
 
+  useEffect(() => {
+    if (Object.keys(topicImages).length > 0) {
+
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+      
+      debounceTimer.current = setTimeout(() => {
+        loadTopicPapers(selectedTopic, topicMode);
+      }, 300);
+    }
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [selectedTopic, topicMode, topicImages]);
+
   // ---------- load topic papers ----------
   const loadTopicPapers = async (topicKey, mode) => {
     setLoadingTopic(true);
     try {
       let results = [];
 
-      if (mode === "latest") {
-        const { results: latest } = await getLatest({
-          source: "arxiv",
-          topicKey,
-          limit: 3,
-        });
-        results = latest?.length
-          ? latest
-          : (await getLatest({ source: "openalex", topicKey, limit: 3 })).results;
-      } else {
-        const hot = await searchLiterature({
-          keyword: topics.find((t) => t.id === topicKey)?.name || topicKey,
-          limit: 3,
-          source: "all",
-          sort_by: "citations",
-          filters: null,
-        });
-        results = hot.results || [];
-      }
+      const { results: papers } = await getLatest({
+        source: "openalex",
+        topicKey,
+        limit: 15,
+        mode: mode,  
+      });
+      
+      results = papers || [];
 
       const topicItem = topics.find((t) => t.id === topicKey);
       const topicImagesList = topicImages[topicKey] || [
@@ -523,7 +533,7 @@ export default function Homepage() {
 
       const topicImagesList = topicImages[topicKey] || [topic.image];
 
-      const transformed = (results || []).map((paper, i) => ({
+      const transformed = (results || []).slice(0, 5).map((paper, i) => ({
         id: paper.doi || paper.url || `topic-${topicKey}-${i}`,
         title: paper.title || "Untitled",
         description: paper.abstract || "No abstract available.",
