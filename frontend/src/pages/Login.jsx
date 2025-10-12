@@ -74,60 +74,75 @@ export default function Login() {
     }
   }, []); 
 
+const handleSubmit = async (e) => {
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-
-    try {
-      if (isLogin) {
-        await login({
-          username: formData.username,
-          password: formData.password
-        });
+  try {
+    let response;
+    if (isLogin) {
+      response = await login({
+        username: formData.username,
+        password: formData.password
+      });
+      
+      console.log('[Login] User data received:', response.user);
+      
+      // Check if profile is complete
+      const hasAvatar = response.user.avatar_url && response.user.avatar_url.trim() !== '';
+      const hasInterests = response.user.interests && response.user.interests.length > 0;
+      
+      console.log('[Login] Profile check:', { hasAvatar, hasInterests });
+      
+      if (!hasAvatar || !hasInterests) {
+        // Profile incomplete - redirect to welcome page
+        console.log('[Login] Profile incomplete, redirecting to welcome page');
+        navigate('/welcome');
       } else {
-        await register({
-          email: formData.email,
-          username: formData.username,
-          password: formData.password
-        });
+        // Profile complete - go to homepage
+        console.log('[Login] Profile complete, redirecting to homepage');
+        navigate('/');
       }
+    } else {
+      // Registration
+      response = await register({
+        email: formData.email,
+        username: formData.username,
+        password: formData.password
+      });
       
-      // Redirect to homepage on success
-      navigate('/');
-    } catch (err) {
-      console.error('[Login] Error:', err);
-      
-      let errorMessage = 'An error occurred';
-      
-      if (err.response?.data?.detail) {
-        // FastAPI 
-        const detail = err.response.data.detail;
-        
-        if (Array.isArray(detail)) {
-          // Pydantic 
-          errorMessage = detail.map(error => {
-            const field = error.loc?.join(' > ') || 'Field';
-            return `${field}: ${error.msg}`;
-          }).join(', ');
-        } else if (typeof detail === 'string') {
-          // String
-          errorMessage = detail;
-        } else if (typeof detail === 'object') {
-          // Object
-          errorMessage = detail.msg || JSON.stringify(detail);
-        }
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
+      console.log('[Register] New user created, redirecting to welcome page');
+      // Always redirect to welcome page after registration
+      navigate('/welcome');
     }
-  };
-
+  } catch (err) {
+    console.error('[Login] Error:', err);
+    
+    let errorMessage = 'An error occurred';
+    
+    if (err.response?.data?.detail) {
+      const detail = err.response.data.detail;
+      
+      if (Array.isArray(detail)) {
+        errorMessage = detail.map(error => {
+          const field = error.loc?.join(' > ') || 'Field';
+          return `${field}: ${error.msg}`;
+        }).join(', ');
+      } else if (typeof detail === 'string') {
+        errorMessage = detail;
+      } else if (typeof detail === 'object') {
+        errorMessage = detail.msg || JSON.stringify(detail);
+      }
+    } else if (err.message) {
+      errorMessage = err.message;
+    }
+    
+    setError(errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
   const handleGoogleLogin = async () => {
     setLoading(true);
     setError(null);
@@ -278,6 +293,7 @@ export default function Login() {
               </p>
             )}
           </div>
+
 
           {/* Submit Button */}
           <button

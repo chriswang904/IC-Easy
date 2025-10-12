@@ -4,6 +4,7 @@ import secrets
 import logging
 import json
 import urllib.parse
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.responses import RedirectResponse
@@ -20,7 +21,8 @@ from utils.auth import (
 from services.google_auth_service import GoogleAuthService
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+# router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 google_auth_service = GoogleAuthService()
 
@@ -28,6 +30,8 @@ class UserRegister(BaseModel):
     email: EmailStr
     username: str
     password: str
+    interests: Optional[List[str]] = []
+    avatar_url: Optional[str] = None
 
     @validator('username')
     def username_alphanumeric(cls, v):
@@ -53,6 +57,13 @@ class Token(BaseModel):
     access_token: str
     token_type: str
     user: UserResponse
+    avatar_url: Optional[str] = None
+    interests: Optional[List[str]] = None
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 
 @router.post("/register", response_model=Token)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -66,7 +77,9 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         email=user_data.email,
         username=user_data.username,
-        hashed_password=hashed_password
+        hashed_password=hashed_password,
+        interests=user_data.interests,
+        avatar_url=user_data.avatar_url
     )
     db.add(new_user)
     db.commit()
@@ -79,40 +92,73 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserResponse(
-            id=new_user.id,
-            email=new_user.email,
-            username=new_user.username,
-            created_at=new_user.created_at.isoformat()
-        )
+        "user": {
+            "id": new_user.id,
+            "email": new_user.email,
+            "username": new_user.username,
+            "created_at": new_user.created_at.isoformat(),
+            "avatar_url": new_user.avatar_url,
+            "interests": new_user.interests,
+        }
     }
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    user = db.query(User).filter(
-        (User.email == form_data.username) | (User.username == form_data.username)
-    ).first()
+    """
+    Handle login using OAuth2 form data (username + password)
+    Returns complete user information including avatar_url and interests
+    """
+    logger.info(f"[Auth] Login attempt for: {form_data.username}")
     
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # Find user by username or email
+    user = db.query(User).filter(
+        (User.username == form_data.username) | (User.email == form_data.username)
+    ).first()
+
+    # Validate user exists
+    if not user:
+        logger.warning(f"[Auth] User not found: {form_data.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email/username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Invalid username or password"
         )
     
-    access_token = create_access_token(data={"sub": user.id})
+    # Check if user has a password (not Google-only user)
+    if not user.hashed_password:
+        logger.warning(f"[Auth] User has no password (Google-only): {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account uses Google login. Please sign in with Google."
+        )
     
-    logger.info(f"[Auth] User logged in: {user.username}")
+    # Verify password
+    if not verify_password(form_data.password, user.hashed_password):
+        logger.warning(f"[Auth] Invalid password for: {form_data.username}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password"
+        )
+
+    # Create access token
+    access_token = create_access_token(data={"sub": str(user.id)})
     
+    logger.info(f"[Auth] Login successful: {user.username}")
+    
+    # Return complete user information
     return {
         "access_token": access_token,
         "token_type": "bearer",
-        "user": UserResponse(
-            id=user.id,
-            email=user.email,
-            username=user.username,
-            created_at=user.created_at.isoformat()
-        )
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "created_at": user.created_at.isoformat(),
+            "avatar_url": user.avatar_url, 
+            "interests": user.interests or [], 
+            "login_method": user.login_method,
+        },
+        "avatar_url": user.avatar_url,  
+        "interests": user.interests or []  
     }
 
 @router.get("/me", response_model=UserResponse)
@@ -213,3 +259,33 @@ async def google_callback(code: str, state: str = None):
         return RedirectResponse(url=f"{frontend_url}/login?error=google_auth_failed")
     finally:
         db.close()
+
+class UserUpdate(BaseModel):
+    interests: Optional[List[str]] = None
+    avatar_url: Optional[str] = None
+
+@router.patch("/user/update")
+def update_user_profile(
+    update_data: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update the current user's interests and avatar URL.
+    """
+    if update_data.interests is not None:
+        current_user.interests = update_data.interests
+    if update_data.avatar_url is not None:
+        current_user.avatar_url = update_data.avatar_url
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "username": current_user.username,
+        "interests": current_user.interests,
+        "avatar_url": current_user.avatar_url,
+        "created_at": current_user.created_at.isoformat(),
+    }

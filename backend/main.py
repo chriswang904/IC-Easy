@@ -12,7 +12,7 @@ Version: 1.0.0
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from api import literature, plagiarism, history, auth
+from api import literature, plagiarism, history, auth, recommendations  
 import os
 import logging
 import sys
@@ -40,7 +40,6 @@ logging.basicConfig(
 # Create logger for this module
 logger = logging.getLogger(__name__)
 
-
 # FASTAPI APPLICATION INITIALIZATION
 
 # Create FastAPI application instance with metadata
@@ -56,6 +55,8 @@ app = FastAPI(
     openapi_url="/openapi.json" # OpenAPI schema
 )
 
+logger.info("[Route Registration] Registering recommendations routes...")
+app.include_router(recommendations.router)
 
 # Create DB tables
 Base.metadata.create_all(bind=engine)

@@ -32,26 +32,51 @@ export const register = async ({ email, username, password }) => {
  */
 export const login = async ({ username, password }) => {
   try {
-    // OAuth2 requires FormData
-    const formData = new FormData();
-    formData.append('username', username);
-    formData.append('password', password);
-    
-    const response = await apiClient.post('/api/auth/login', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
+    // OAuth2 expects URL-encoded body, not JSON
+    const params = new URLSearchParams();
+    params.append("username", username);
+    params.append("password", password);
+
+    console.log("[Auth] Sending login data:", params.toString());
+
+    const response = await fetch("http://localhost:8000/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: params.toString(),
     });
-    
-    // Save token and user info
-    localStorage.setItem('access_token', response.data.access_token);
-    localStorage.setItem('user', JSON.stringify(response.data.user));
-    
-    console.log('[Auth] Login successful:', response.data.user.username);
-    return response.data;
+
+    console.log("[Auth] Raw Response Status:", response.status);
+    console.log("[Auth] Raw Headers:", [...response.headers.entries()]);
+
+    // Try to parse error safely
+    if (!response.ok) {
+      let errorMessage = "";
+      try {
+        const text = await response.text();
+        console.error("[Auth] Raw error text:", text);
+        errorMessage = text;
+      } catch (err) {
+        console.error("[Auth] Could not read response text");
+      }
+      throw new Error(errorMessage || `Login failed (status ${response.status})`);
+    }
+
+    // If response is ok
+    const data = await response.json();
+    console.log("[Auth] Login successful:", data);
+
+    localStorage.setItem("access_token", data.access_token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    return data;
   } catch (error) {
-    console.error('[Auth] Login failed:', error);
+    console.error("[Auth] Login failed:", error);
     throw error;
   }
 };
+
+
 
 /**
  * Logout user

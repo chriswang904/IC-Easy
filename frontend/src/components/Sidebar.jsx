@@ -191,6 +191,15 @@ function Sidebar() {
                 </div>
 
                 <button
+                  onClick={() => navigate("/profile")}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-purple-600 hover:bg-purple-50 rounded transition"
+                  aria-label="Edit Profile"
+                >
+                  <User className="w-4 h-4" />
+                  Edit Profile
+                </button>
+
+                <button
                   onClick={handleLogout}
                   className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition"
                   aria-label="Logout"
@@ -200,6 +209,7 @@ function Sidebar() {
                 </button>
               </div>
             )}
+
           </div>
         ) : (
           <button

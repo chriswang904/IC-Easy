@@ -58,7 +58,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         if user_id_str is None:
             raise credentials_exception
         
-        user_id = int(user_id_str)
+        try:
+            user_id = int(user_id_str)
+        except (TypeError, ValueError):
+            print(f"[DEBUG] Invalid 'sub' type: {user_id_str}")
+            raise credentials_exception
         
     except JWTError as e:
         print(f"[DEBUG] JWT Error: {e}")

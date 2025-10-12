@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, JSON
 from datetime import datetime
 from database import Base
+
 
 class User(Base):
     __tablename__ = "users"
@@ -18,3 +19,6 @@ class User(Base):
     google_refresh_token = Column(String, nullable=True)
     google_token_expiry = Column(DateTime, nullable=True)
     login_method = Column(String, default="email")  # "email" or "google"
+
+    avatar_url = Column(String, nullable=True)  # DiceBear Avatar
+    interests = Column(JSON, nullable=True)     # Users' Interests

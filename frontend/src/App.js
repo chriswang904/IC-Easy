@@ -11,27 +11,44 @@ import Sidebar from "./components/Sidebar";
 import PlagiarismResultPage from "./pages/PlagiarismResultPage";
 import SummarizeResultPage from "./pages/SummarizeResultPage";
 import PolishPage from "./pages/PolishPage";
+import Welcome from "./pages/Welcome";
+import Profile from "./pages/Profile";
 
 function App() {
   return (
     <BrowserRouter>
-      <Sidebar />
+      <Routes>
+        {/*Routes that should NOT show the Sidebar */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/welcome" element={<Welcome />} />
 
-      <div className="ml-20">
-        <Routes>
-          <Route path="/" element={<Homepage />} />
-          <Route path="/essay/:id" element={<EssayEditor />} />
-          <Route path="/collections" element={<CollectionsPage />} />
-          <Route path="/explore" element={<ExplorePage />} />
-          <Route path="/aitool" element={<AIToolPage />} />
-          <Route path="/plagiarism-result" element={<PlagiarismResultPage />} />
-          <Route path="/recent" element={<RecentPage />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/summarize-result" element={<SummarizeResultPage />} />
-          <Route path="/polish" element={<PolishPage />} />
-        </Routes>
-      </div>
+        {/* Routes that SHOULD include the Sidebar */}
+        <Route
+          path="/*"
+          element={
+            <>
+              <Sidebar />
+
+              <div className="ml-20">
+                <Routes>
+                  <Route path="/" element={<Homepage />} />
+                  <Route path="/essay/:id" element={<EssayEditor />} />
+                  <Route path="/collections" element={<CollectionsPage />} />
+                  <Route path="/explore" element={<ExplorePage />} />
+                  <Route path="/aitool" element={<AIToolPage />} />
+                  <Route path="/plagiarism-result" element={<PlagiarismResultPage />} />
+                  <Route path="/recent" element={<RecentPage />} />
+                  <Route path="/history" element={<History />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/summarize-result" element={<SummarizeResultPage />} />
+                  <Route path="/polish" element={<PolishPage />} />
+                  <Route path="/profile" element={<Profile />} />
+                </Routes>
+              </div>
+            </>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }
