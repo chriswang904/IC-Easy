@@ -2,6 +2,7 @@
   "name": "ic_easy",
   "version": "0.1.0",
   "private": true,
+  "proxy": "http://localhost:8000",
   "dependencies": {
     "@lexical/link": "^0.36.2",
     "@lexical/list": "^0.36.2",

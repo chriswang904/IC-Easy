@@ -1,321 +1,294 @@
-import React, { useRef, useState, useEffect } from "react";
-import Sidebar from "../components/Sidebar";
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  FileText,
+  BookMarked,
+  Sparkles,
+  FileEdit,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
-const ExplorePage = () => {
-  const scrollRef = useRef(null);
-  const [centerCardIndex, setCenterCardIndex] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
-  const [activeTab, setActiveTab] = useState(1);
+export default function ExplorePage() {
+  const navigate = useNavigate();
+  const [activeSlide, setActiveSlide] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
 
-  const contentCards = [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }];
-
-  const bottomNavItems = [
-    { id: 1, label: "All" },
-    { id: 2, label: "Notes" },
-    { id: 3, label: "Essays" },
-    { id: 4, label: "Papers" },
+  const features = [
+    {
+      icon: Search,
+      title: "Smart Essay Search",
+      route: "",
+      tagline: "Discover Research Across Multiple Databases",
+      description:
+        "Access the latest academic essays and papers from leading research databases. Our powerful search engine connects you to CrossRef, OpenAlex, and arXiv, giving you comprehensive coverage of scholarly work.",
+      color: "bg-purple-600",
+      lightColor: "bg-purple-100",
+      textColor: "text-purple-700",
+      features: [
+        "Browse the latest academic essays",
+        "Search across CrossRef, OpenAlex & arXiv",
+        "Advanced filters for precise results",
+        "Real-time research updates",
+      ],
+    },
+    {
+      icon: FileText,
+      title: "TextLab",
+      route: "aitool",
+      tagline: "Analyze & Summarize Your Documents",
+      description:
+        "Upload your documents for instant plagiarism detection and AI-powered summarization. Ensure your work's originality while saving time with automated analysis that understands academic content.",
+      color: "bg-pink-600",
+      lightColor: "bg-pink-100",
+      textColor: "text-pink-700",
+      features: [
+        "Plagiarism detection technology",
+        "AI-powered document summaries",
+        "Support for multiple file formats",
+        "Instant results and insights",
+      ],
+    },
+    {
+      icon: BookMarked,
+      title: "Collections",
+      route: "collections",
+      tagline: "Organize Your Research Library",
+      description:
+        "Build your personal research library with custom collections. Create topics and subjects to organize papers, making it easy to find and manage your research materials for different projects.",
+      color: "bg-purple-700",
+      lightColor: "bg-purple-100",
+      textColor: "text-purple-800",
+      features: [
+        "Save papers for later reading",
+        "Create custom topics & subjects",
+        "Organize by projects",
+        "Access from anywhere",
+      ],
+    },
+    {
+      icon: Sparkles,
+      title: "Polish",
+      route: "polish",
+      tagline: "Refine Your Writing Instantly",
+      description:
+        "Perfect your academic writing with our intelligent editing tools. Check grammar, get style suggestions, and rephrase sentences for clarity and impact. Make your writing shine with just a few clicks.",
+      color: "bg-pink-500",
+      lightColor: "bg-pink-100",
+      textColor: "text-pink-600",
+      features: [
+        "Advanced grammar checking",
+        "Smart rephrasing suggestions",
+        "Style improvement tips",
+        "Real-time writing feedback",
+      ],
+    },
+    {
+      icon: FileEdit,
+      title: "Google Docs Integration",
+      route: "essay/:id",
+      tagline: "Write With Seamless Cloud Sync",
+      description:
+        "Connect your Google account and write directly on our platform. Everything you create is automatically synchronized to your Google Drive, ensuring your work is always backed up and accessible.",
+      color: "bg-purple-500",
+      lightColor: "bg-purple-100",
+      textColor: "text-purple-600",
+      features: [
+        "One-click Google account connection",
+        "Real-time cloud synchronization",
+        "Auto-save to Google Drive",
+        "Work from any device",
+      ],
+    },
   ];
 
-  const getCategoryStyle = (category) => {
-    const styles = {
-      Notes: "bg-blue-100 text-blue-700",
-      Essay: "bg-green-100 text-green-700",
-      Paper: "bg-purple-100 text-purple-700",
-    };
-    return styles[category] || "bg-gray-100 text-gray-700";
+  const nextSlide = () => {
+    if (!isAnimating) {
+      setIsAnimating(true);
+      setActiveSlide((prev) => (prev + 1) % features.length);
+      setTimeout(() => setIsAnimating(false), 500);
+    }
   };
 
-  // Rectangle content for each tab
-  const allContent = [
-    {
-      id: 1,
-      name: "Mountain View",
-      category: "Notes",
-      lastView: "2 hours ago",
-      image: "rectangle-1.svg",
-    },
-    {
-      id: 2,
-      name: "City Lights",
-      category: "Essay",
-      lastView: "5 hours ago",
-      image: "rectangle-2.svg",
-    },
-    {
-      id: 3,
-      name: "Ocean Waves",
-      category: "Paper",
-      lastView: "1 day ago",
-      image: "rectangle-3.svg",
-    },
-    {
-      id: 4,
-      name: "Forest Path",
-      category: "Notes",
-      lastView: "2 days ago",
-      image: "rectangle-4.svg",
-    },
-    {
-      id: 5,
-      name: "Sunset Beach",
-      category: "Essay",
-      lastView: "3 days ago",
-      image: "rectangle-5.svg",
-    },
-    {
-      id: 6,
-      name: "Urban Art",
-      category: "Paper",
-      lastView: "4 days ago",
-      image: "rectangle-6.svg",
-    },
-    {
-      id: 7,
-      name: "Coffee Shop",
-      category: "Notes",
-      lastView: "30 mins ago",
-      image: "rectangle-1.svg",
-    },
-    {
-      id: 8,
-      name: "Park Trail",
-      category: "Essay",
-      lastView: "3 hours ago",
-      image: "rectangle-2.svg",
-    },
-    {
-      id: 9,
-      name: "Design Ideas",
-      category: "Paper",
-      lastView: "Yesterday",
-      image: "rectangle-1.svg",
-    },
-    {
-      id: 10,
-      name: "Recipe Book",
-      category: "Notes",
-      lastView: "2 days ago",
-      image: "rectangle-2.svg",
-    },
-  ];
-
-  const getFilteredRectangles = () => {
-    if (activeTab === 1) return allContent; // All
-    if (activeTab === 2)
-      return allContent.filter((item) => item.category === "Notes"); // Notes
-    if (activeTab === 3)
-      return allContent.filter((item) => item.category === "Essay"); // Essays
-    if (activeTab === 4)
-      return allContent.filter((item) => item.category === "Paper"); // Papers
-    return allContent;
+  const prevSlide = () => {
+    if (!isAnimating) {
+      setIsAnimating(true);
+      setActiveSlide((prev) => (prev - 1 + features.length) % features.length);
+      setTimeout(() => setIsAnimating(false), 500);
+    }
   };
 
-  const handleScroll = () => {
-    if (!scrollRef.current) return;
-
-    const container = scrollRef.current;
-    const scrollLeft = container.scrollLeft;
-    const containerWidth = container.offsetWidth;
-    const cards = container.querySelectorAll(".card-item");
-
-    let closestIndex = 0;
-    let minDistance = Infinity;
-
-    cards.forEach((card, index) => {
-      const cardLeft = card.offsetLeft;
-      const cardWidth = card.offsetWidth;
-      const cardCenter = cardLeft + cardWidth / 2;
-      const containerCenter = scrollLeft + containerWidth / 2;
-      const distance = Math.abs(cardCenter - containerCenter);
-
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestIndex = index;
-      }
-    });
-
-    setCenterCardIndex(closestIndex);
-  };
-
-  const handleMouseDown = (e) => {
-    if (!scrollRef.current) return;
-    setIsDragging(true);
-    setStartX(e.pageX - scrollRef.current.offsetLeft);
-    setScrollLeft(scrollRef.current.scrollLeft);
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleMouseMove = (e) => {
-    if (!isDragging || !scrollRef.current) return;
-    e.preventDefault();
-    const x = e.pageX - scrollRef.current.offsetLeft;
-    const walk = (x - startX) * 2;
-    scrollRef.current.scrollLeft = scrollLeft - walk;
+  const goToSlide = (index) => {
+    if (!isAnimating && index !== activeSlide) {
+      setIsAnimating(true);
+      setActiveSlide(index);
+      setTimeout(() => setIsAnimating(false), 500);
+    }
   };
 
   useEffect(() => {
-    const container = scrollRef.current;
-    if (container) {
-      container.addEventListener("scroll", handleScroll);
+    const handleKeyDown = (e) => {
+      if (e.key === "ArrowLeft") prevSlide();
+      if (e.key === "ArrowRight") nextSlide();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAnimating]);
 
-      // Scroll to center the 3rd card initially
-      const cards = container.querySelectorAll(".card-item");
-      if (cards.length >= 3) {
-        const thirdCard = cards[2]; // Index 2 = 3rd card
-        const cardLeft = thirdCard.offsetLeft;
-        const cardWidth = thirdCard.offsetWidth;
-        const containerWidth = container.offsetWidth;
-        const scrollPosition = cardLeft - containerWidth / 2 + cardWidth / 2;
-        container.scrollLeft = scrollPosition;
-      }
-
-      handleScroll();
-      return () => container.removeEventListener("scroll", handleScroll);
-    }
-  }, []);
-
-  const currentRectangles = getFilteredRectangles();
+  const currentFeature = features[activeSlide];
+  const Icon = currentFeature.icon;
 
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <div className="flex-1 flex justify-center items-start p-6">
-          <article className="bg-white rounded-t-3xl shadow-xl p-6 w-[90%] max-w-6xl min-h-screen">
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Main scrollable content */}
-              <div className="flex-1 overflow-y-auto">
-                {/* Scrollable Cards Section */}
-                <div className="pt-8 px-6">
-                  <div
-                    ref={scrollRef}
-                    onScroll={handleScroll}
-                    onMouseDown={handleMouseDown}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onMouseMove={handleMouseMove}
-                    className={`flex gap-6 overflow-x-auto pb-4 scroll-smooth ${
-                      isDragging ? "cursor-grabbing" : "cursor-grab"
-                    }`}
-                    style={{
-                      scrollbarWidth: "none",
-                      msOverflowStyle: "none",
-                      userSelect: "none",
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 border-8 border-purple-200">
+      {/* Hero Section */}
+      <div className="relative py-2 px-6">
+        <div className="max-w-7xl mx-auto text-center">
+          <h1 className="text-6xl font-bold mb-4 text-gray-900">
+            Your Research. Elevated.
+          </h1>
+          <p className="text-xl text-gray-600">
+            Five powerful tools designed for academic excellence
+          </p>
+        </div>
+      </div>
+
+      {/* Carousel Container */}
+      <div className="max-w-6xl mx-auto px-6 pb-20 pt-4">
+        <div className="relative">
+          {/* Main Carousel Card */}
+          <div
+            className={`relative bg-white rounded-3xl shadow-xl overflow-hidden transition-all duration-500 border border-gray-200 ${
+              isAnimating ? "opacity-0 scale-95" : "opacity-100 scale-100"
+            }`}
+          >
+            <div className="relative grid md:grid-cols-2 gap-12 p-12 md:p-16">
+              {/* Left Side - Content */}
+              <div className="flex flex-col justify-center space-y-6">
+                <div
+                  className={`inline-flex w-20 h-20 rounded-2xl ${currentFeature.color} items-center justify-center shadow-lg`}
+                >
+                  <Icon className="w-10 h-10 text-white" />
+                </div>
+
+                <div>
+                  <div className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    Feature {activeSlide + 1} of {features.length}
+                  </div>
+                  <h2 className="text-5xl font-bold mb-3 text-gray-900">
+                    {currentFeature.title}
+                  </h2>
+                  <p
+                    className={`text-2xl font-medium ${currentFeature.textColor} mb-6`}
+                  >
+                    {currentFeature.tagline}
+                  </p>
+                  <p className="text-lg text-gray-700 leading-relaxed">
+                    {currentFeature.description}
+                  </p>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    onClick={() => {
+                      navigate(`/${currentFeature.route}`);
                     }}
+                    className={`px-8 py-4 ${currentFeature.color} text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all`}
                   >
-                    {contentCards.map((card, index) => {
-                      const isCentered = index === centerCardIndex;
-                      return (
+                    Explore {currentFeature.title}
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Side - Feature List */}
+              <div className="flex flex-col justify-center">
+                <div
+                  className={`${currentFeature.lightColor} rounded-2xl p-8 shadow-md border border-gray-100`}
+                >
+                  <h3 className="text-2xl font-bold text-gray-900 mb-6">
+                    Key Features
+                  </h3>
+                  <ul className="space-y-4">
+                    {currentFeature.features.map((feature, idx) => (
+                      <li key={idx} className="flex items-start gap-4 group">
                         <div
-                          key={card.id}
-                          className={`card-item flex-shrink-0 bg-gray-200 rounded-3xl shadow-sm transition-all duration-300 ${
-                            isCentered
-                              ? "w-[500px] h-[333px] scale-110 shadow-xl"
-                              : "w-[480px] h-[320px] scale-90 opacity-60"
-                          }`}
+                          className={`w-8 h-8 rounded-full ${currentFeature.color} flex items-center justify-center flex-shrink-0 shadow-md group-hover:scale-110 transition-transform`}
                         >
-                          <div className="w-full h-full flex items-center justify-center p-8">
-                            <div className="flex flex-col items-center gap-4">
-                              <div
-                                className="w-16 h-16 bg-gray-300"
-                                style={{
-                                  clipPath:
-                                    "polygon(50% 0%, 0% 100%, 100% 100%)",
-                                }}
-                              />
-                              <div className="flex gap-4">
-                                <div
-                                  className="w-12 h-12 bg-gray-300"
-                                  style={{
-                                    borderRadius: "50%",
-                                  }}
-                                />
-                                <div className="w-12 h-12 bg-gray-300 rounded-lg" />
-                              </div>
-                            </div>
-                          </div>
+                          <Circle className="w-3 h-3 fill-white text-white" />
                         </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Show All Button */}
-                  <div className="flex justify-end mt-6">
-                    <button className="text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors">
-                      Show all
-                    </button>
-                  </div>
-                </div>
-
-                {/* Bottom Navigation Tabs */}
-                <div className="px-6 py-6">
-                  <nav
-                    className="flex items-center gap-2 bg-[#f3edf7] rounded-full p-2 w-fit mx-auto"
-                    role="tablist"
-                  >
-                    {bottomNavItems.map((item) => (
-                      <button
-                        key={item.id}
-                        onClick={() => setActiveTab(item.id)}
-                        role="tab"
-                        aria-selected={activeTab === item.id}
-                        className={`px-6 py-2 rounded-full font-medium transition-colors duration-200 ${
-                          activeTab === item.id
-                            ? "bg-purple-600 text-white"
-                            : "bg-purple-100 text-purple-900 hover:bg-purple-200"
-                        }`}
-                      >
-                        <span className="text-sm">{item.label}</span>
-                      </button>
+                        <span className="text-gray-700 text-lg pt-1">
+                          {feature}
+                        </span>
+                      </li>
                     ))}
-                  </nav>
-                </div>
-
-                {/* Rectangles Section - All displayed, scroll page to see more */}
-                <div className="px-8 pb-6">
-                  <div className="grid grid-cols-4 gap-12 max-w-6xl mx-auto">
-                    {currentRectangles.map((rect) => (
-                      <div
-                        key={rect.id}
-                        className="bg-white rounded-[10px] w-64 h-[187px] shadow-lg relative overflow-hidden"
-                      >
-                        {/* Image placeholder */}
-                        <div className="w-full h-[114px] bg-gray-200 flex items-center justify-center">
-                          <div className="text-gray-400 text-xs">Image</div>
-                        </div>
-
-                        {/* Bottom right info */}
-                        <div className="absolute bottom-1 left-4">
-                          <h3 className="font-semibold text-sm text-gray-900">
-                            {rect.name}
-                          </h3>
-                          <p
-                            className={`text-xs mt-0 px-0 py-0.5 rounded-md inline-block ${getCategoryStyle(
-                              rect.category
-                            )}`}
-                          >
-                            {rect.category}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            {rect.lastView}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  </ul>
                 </div>
               </div>
             </div>
-          </article>
+          </div>
+
+          {/* Navigation Buttons */}
+          <button
+            onClick={prevSlide}
+            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-6 w-14 h-14 bg-white border-2 border-purple-200 rounded-full shadow-xl flex items-center justify-center hover:scale-110 hover:border-purple-300 transition-all text-gray-800"
+            disabled={isAnimating}
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+
+          <button
+            onClick={nextSlide}
+            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-6 w-14 h-14 bg-white border-2 border-purple-200 rounded-full shadow-xl flex items-center justify-center hover:scale-110 hover:border-purple-300 transition-all text-gray-800"
+            disabled={isAnimating}
+          >
+            <ChevronRight className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Dots Navigation */}
+        <div className="flex justify-center items-center gap-3 mt-12">
+          {features.map((feature, idx) => (
+            <button
+              key={idx}
+              onClick={() => goToSlide(idx)}
+              className="group relative"
+              disabled={isAnimating}
+            >
+              <div
+                className={`transition-all duration-300 rounded-full ${
+                  idx === activeSlide
+                    ? "w-12 h-3 bg-purple-600"
+                    : "w-3 h-3 bg-purple-300 hover:bg-purple-400"
+                }`}
+              />
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs px-3 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                {feature.title}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
-    </main>
-  );
-};
 
-export default ExplorePage;
+      {/* Bottom CTA */}
+      <div className="bg-white border-t-4 border-purple-200 py-16 px-6 mt-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <h2 className="text-4xl font-bold mb-4 text-gray-900">
+            Start Your Research Journey Today
+          </h2>
+          <p className="text-xl text-gray-600 mb-8">
+            Join thousands of researchers and students worldwide
+          </p>
+          <button
+            className="bg-purple-600 text-white px-10 py-4 rounded-xl font-bold text-lg hover:bg-purple-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+            onClick={() => {
+              navigate(`/login`);
+            }}
+          >
+            Get Started Free
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

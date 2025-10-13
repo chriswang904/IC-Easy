@@ -45,6 +45,9 @@ class UserRegister(BaseModel):
     def password_strength(cls, v):
         if len(v) < 6:
             raise ValueError('Password must be at least 6 characters')
+        # Truncate instead of raising error
+        if len(v) > 72:
+            v = v[:72]  # ← Just truncate it
         return v
 
 class UserResponse(BaseModel):
@@ -67,40 +70,55 @@ class LoginRequest(BaseModel):
 
 @router.post("/register", response_model=Token)
 def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == user_data.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
-    if db.query(User).filter(User.username == user_data.username).first():
-        raise HTTPException(status_code=400, detail="Username already taken")
-    
-    hashed_password = get_password_hash(user_data.password)
-    new_user = User(
-        email=user_data.email,
-        username=user_data.username,
-        hashed_password=hashed_password,
-        interests=user_data.interests,
-        avatar_url=user_data.avatar_url
-    )
-    db.add(new_user)
-    db.commit()
-    db.refresh(new_user)
-    
-    access_token = create_access_token(data={"sub": new_user.id})
-    
-    logger.info(f"[Auth] New user registered: {new_user.username}")
-    
-    return {
-        "access_token": access_token,
-        "token_type": "bearer",
-        "user": {
-            "id": new_user.id,
-            "email": new_user.email,
-            "username": new_user.username,
-            "created_at": new_user.created_at.isoformat(),
-            "avatar_url": new_user.avatar_url,
-            "interests": new_user.interests,
+    try:
+        logger.info(f"[Register] Starting registration for: {user_data.email}")
+        
+        if db.query(User).filter(User.email == user_data.email).first():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        if db.query(User).filter(User.username == user_data.username).first():
+            raise HTTPException(status_code=400, detail="Username already taken")
+        
+        logger.info(f"[Register] Hashing password...")
+        hashed_password = get_password_hash(user_data.password)
+        
+        logger.info(f"[Register] Creating user object...")
+        new_user = User(
+            email=user_data.email,
+            username=user_data.username,
+            hashed_password=hashed_password,
+            interests=json.dumps(user_data.interests) if user_data.interests else None,
+            avatar_url=user_data.avatar_url
+        )
+        
+        logger.info(f"[Register] Adding to database...")
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+        
+        logger.info(f"[Register] Creating access token...")
+        access_token = create_access_token(data={"sub": new_user.id})
+        
+        logger.info(f"[Auth] New user registered: {new_user.username}")
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user": {
+                "id": new_user.id,
+                "email": new_user.email,
+                "username": new_user.username,
+                "created_at": new_user.created_at.isoformat(),
+                "avatar_url": new_user.avatar_url,
+                "interests": json.loads(new_user.interests) if new_user.interests else [],
+            }
         }
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Register] ERROR: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @router.post("/login", response_model=Token)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -273,19 +291,33 @@ def update_user_profile(
     """
     Update the current user's interests and avatar URL.
     """
-    if update_data.interests is not None:
-        current_user.interests = update_data.interests
-    if update_data.avatar_url is not None:
-        current_user.avatar_url = update_data.avatar_url
+    try:
+        logger.info(f"[User Update] Updating user {current_user.username}")
+        logger.info(f"[User Update] Data: {update_data}")
+        
+        if update_data.interests is not None:
+            # Convert list to JSON string for SQLite
+            current_user.interests = json.dumps(update_data.interests)
+            logger.info(f"[User Update] Set interests: {current_user.interests}")
+            
+        if update_data.avatar_url is not None:
+            current_user.avatar_url = update_data.avatar_url
+            logger.info(f"[User Update] Set avatar: {update_data.avatar_url}")
 
-    db.commit()
-    db.refresh(current_user)
+        db.commit()
+        db.refresh(current_user)
+        
+        logger.info(f"[User Update] Update successful")
 
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "username": current_user.username,
-        "interests": current_user.interests,
-        "avatar_url": current_user.avatar_url,
-        "created_at": current_user.created_at.isoformat(),
-    }
+        return {
+            "id": current_user.id,
+            "email": current_user.email,
+            "username": current_user.username,
+            "interests": json.loads(current_user.interests) if current_user.interests else [],  # ← Convert back to list
+            "avatar_url": current_user.avatar_url,
+            "created_at": current_user.created_at.isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"[User Update] ERROR: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Profile update failed: {str(e)}")

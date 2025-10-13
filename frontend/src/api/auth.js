@@ -2,27 +2,27 @@
  * Authentication API Module
  */
 
-import apiClient from './client';
+import apiClient from "./client";
 
 /**
  * Register new user
  */
 export const register = async ({ email, username, password }) => {
   try {
-    const response = await apiClient.post('/api/auth/register', {
+    const response = await apiClient.post("/api/auth/register", {
       email,
       username,
-      password
+      password,
     });
-    
+
     // Save token and user info
-    localStorage.setItem('access_token', response.data.access_token);
-    localStorage.setItem('user', JSON.stringify(response.data.user));
-    
-    console.log('[Auth] Registration successful:', response.data.user.username);
+    localStorage.setItem("access_token", response.data.access_token);
+    localStorage.setItem("user", JSON.stringify(response.data.user));
+
+    console.log("[Auth] Registration successful:", response.data.user.username);
     return response.data;
   } catch (error) {
-    console.error('[Auth] Registration failed:', error);
+    console.error("[Auth] Registration failed:", error);
     throw error;
   }
 };
@@ -39,7 +39,7 @@ export const login = async ({ username, password }) => {
 
     console.log("[Auth] Sending login data:", params.toString());
 
-    const response = await fetch("http://localhost:8000/api/auth/login", {
+    const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -60,7 +60,9 @@ export const login = async ({ username, password }) => {
       } catch (err) {
         console.error("[Auth] Could not read response text");
       }
-      throw new Error(errorMessage || `Login failed (status ${response.status})`);
+      throw new Error(
+        errorMessage || `Login failed (status ${response.status})`
+      );
     }
 
     // If response is ok
@@ -76,15 +78,13 @@ export const login = async ({ username, password }) => {
   }
 };
 
-
-
 /**
  * Logout user
  */
 export const logout = () => {
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('user');
-  console.log('[Auth] User logged out');
+  localStorage.removeItem("access_token");
+  localStorage.removeItem("user");
+  console.log("[Auth] User logged out");
 };
 
 /**
@@ -92,10 +92,10 @@ export const logout = () => {
  */
 export const getCurrentUser = async () => {
   try {
-    const response = await apiClient.get('/api/auth/me');
+    const response = await apiClient.get("/api/auth/me");
     return response.data;
   } catch (error) {
-    console.error('[Auth] Failed to get current user:', error);
+    console.error("[Auth] Failed to get current user:", error);
     throw error;
   }
 };
@@ -104,7 +104,7 @@ export const getCurrentUser = async () => {
  * Get stored user from localStorage
  */
 export const getStoredUser = () => {
-  const userStr = localStorage.getItem('user');
+  const userStr = localStorage.getItem("user");
   return userStr ? JSON.parse(userStr) : null;
 };
 
@@ -112,12 +112,12 @@ export const getStoredUser = () => {
  * Check if user is authenticated
  */
 export const isAuthenticated = () => {
-  return !!localStorage.getItem('access_token');
+  return !!localStorage.getItem("access_token");
 };
 
 export const getErrorMessage = (error) => {
   if (error.response?.data?.detail) {
     return error.response.data.detail;
   }
-  return error.message || 'An error occurred';
+  return error.message || "An error occurred";
 };

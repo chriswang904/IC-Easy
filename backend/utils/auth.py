@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt  # ← Direct bcrypt import
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -14,20 +14,23 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
-# Encrypt Password
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 optional_oauth2_scheme = HTTPBearer(auto_error=False)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Validate Password"""
-    return pwd_context.verify(plain_password, hashed_password)
+    # Truncate to 72 bytes and encode
+    plain_password = plain_password[:72].encode('utf-8')
+    hashed_password = hashed_password.encode('utf-8') if isinstance(hashed_password, str) else hashed_password
+    return bcrypt.checkpw(plain_password, hashed_password)
 
 def get_password_hash(password: str) -> str:
-    """Encrypt Password"""
-    return pwd_context.hash(password)
+    """Hash a password for storing"""
+    # Truncate to 72 bytes and encode
+    password = password[:72].encode('utf-8')
+    hashed = bcrypt.hashpw(password, bcrypt.gensalt())
+    return hashed.decode('utf-8')
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """Create JWT token"""
@@ -52,36 +55,26 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id_str = payload.get("sub")  
         
-        print(f"[DEBUG] Token payload: {payload}")
-        print(f"[DEBUG] User ID from token: {user_id_str}, type: {type(user_id_str)}")
-        
         if user_id_str is None:
             raise credentials_exception
         
         try:
             user_id = int(user_id_str)
         except (TypeError, ValueError):
-            print(f"[DEBUG] Invalid 'sub' type: {user_id_str}")
             raise credentials_exception
         
-    except JWTError as e:
-        print(f"[DEBUG] JWT Error: {e}")
-        raise credentials_exception
-    except ValueError as e:
-        print(f"[DEBUG] Value Error: {e}")
+    except JWTError:
         raise credentials_exception
     
     user = db.query(User).filter(User.id == user_id).first()
-    
-    print(f"[DEBUG] User query - ID: {user_id}, Found: {user.username if user else None}")
     
     if user is None:
         raise credentials_exception
     
     return user
 
-# Guest Service
 def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_oauth2_scheme), db: Session = Depends(get_db)):
+    """Guest Service"""
     if not credentials:
         return None
     try:

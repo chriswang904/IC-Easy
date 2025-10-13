@@ -33,8 +33,32 @@ export default function Profile() {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const updated = await updateUserProfile({ interests, avatar_url: avatarUrl });
+      console.log("[Profile] Saving profile with interests:", interests);
+
+      const updated = await updateUserProfile({
+        interests,
+        avatar_url: avatarUrl,
+      });
+
+      console.log("[Profile] Profile saved successfully:", updated);
+
+      // Update localStorage
       localStorage.setItem("user", JSON.stringify(updated));
+      console.log("[Profile] User saved to localStorage");
+
+      // Set timestamp for change detection when navigating back
+      const timestamp = Date.now().toString();
+      localStorage.setItem("profile_update_time", timestamp);
+      console.log("[Profile] Timestamp saved:", timestamp);
+
+      // Dispatch custom event to notify other components (like Homepage)
+      const event = new CustomEvent("profile-updated", {
+        detail: { user: updated },
+      });
+      window.dispatchEvent(event);
+
+      console.log("[Profile] Profile saved and event dispatched");
+
       alert("Profile updated successfully");
     } catch (err) {
       console.error("Update failed:", err);
@@ -55,10 +79,16 @@ export default function Profile() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex justify-center items-start p-6">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md">
-        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">Profile</h1>
+        <h1 className="text-3xl font-bold text-center text-gray-800 mb-6">
+          Profile
+        </h1>
 
         <div className="flex flex-col items-center mb-6">
-          <img src={avatarUrl} alt="avatar" className="w-24 h-24 rounded-full mb-3" />
+          <img
+            src={avatarUrl}
+            alt="avatar"
+            className="w-24 h-24 rounded-full mb-3"
+          />
           <button
             onClick={handleAvatarChange}
             className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-700"

@@ -21,17 +21,33 @@ function Sidebar() {
   let menuTimeout = null;
 
   useEffect(() => {
-    const userStr = localStorage.getItem("user");
-    if (userStr) {
-      try {
-        const parsedUser = JSON.parse(userStr);
-        setUser(parsedUser);
-        console.log("[Sidebar] User loaded:", parsedUser);
-        console.log("[Sidebar] Picture URL:", parsedUser.picture);
-      } catch (e) {
-        console.error("[Sidebar] Failed to parse user from localStorage:", e);
+    const loadUser = () => {
+      const userStr = localStorage.getItem("user");
+      if (userStr) {
+        try {
+          const parsedUser = JSON.parse(userStr);
+          setUser(parsedUser);
+          console.log("[Sidebar] User loaded:", parsedUser);
+          console.log("[Sidebar] Picture URL:", parsedUser.picture);
+        } catch (e) {
+          console.error("[Sidebar] Failed to parse user from localStorage:", e);
+        }
       }
-    }
+    };
+
+    loadUser();
+
+    // Listen for profile updates
+    const handleProfileUpdate = () => {
+      console.log("[Sidebar] Profile updated, reloading user...");
+      loadUser();
+    };
+
+    window.addEventListener("profile-updated", handleProfileUpdate);
+
+    return () => {
+      window.removeEventListener("profile-updated", handleProfileUpdate);
+    };
   }, []);
 
   const handleLogout = () => {
@@ -209,7 +225,6 @@ function Sidebar() {
                 </button>
               </div>
             )}
-
           </div>
         ) : (
           <button

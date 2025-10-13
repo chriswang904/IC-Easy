@@ -1,23 +1,4 @@
-import axios from "axios";
-
-const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8000";
-
-const api = axios.create({
-  baseURL: API_BASE,
-});
-
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      console.warn("[Auth] Token expired or invalid. Redirecting to /login...");
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("user");
-      window.location.href = "/login";
-    }
-    return Promise.reject(error);
-  }
-);
+import apiClient from "./client"; // ← Use the shared client
 
 /**
  * Update user profile (interests and avatar)
@@ -32,20 +13,12 @@ export async function updateUserProfile(data) {
 
   try {
     console.log("[User API] Updating profile:", data);
-    
-    const response = await axios.patch(
-      `${API_BASE}/api/auth/user/update`, 
-      data, 
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
+
+    // Use apiClient instead of axios directly
+    const response = await apiClient.patch("/api/auth/user/update", data);
 
     console.log("[User API] Profile updated successfully:", response.data);
-    
+
     // Return the updated user data
     return response.data;
   } catch (error) {
@@ -54,4 +27,5 @@ export async function updateUserProfile(data) {
   }
 }
 
-export default api;
+// If you need to export the api instance for other uses
+export { default as api } from "./client";
