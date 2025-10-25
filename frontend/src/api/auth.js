@@ -32,7 +32,6 @@ export const register = async ({ email, username, password }) => {
  */
 export const login = async ({ username, password }) => {
   try {
-    // OAuth2 expects URL-encoded body, not JSON
     const params = new URLSearchParams();
     params.append("username", username);
     params.append("password", password);
@@ -41,42 +40,55 @@ export const login = async ({ username, password }) => {
 
     const response = await fetch("/api/auth/login", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
     });
 
     console.log("[Auth] Raw Response Status:", response.status);
-    console.log("[Auth] Raw Headers:", [...response.headers.entries()]);
 
-    // Try to parse error safely
     if (!response.ok) {
-      let errorMessage = "";
-      try {
-        const text = await response.text();
-        console.error("[Auth] Raw error text:", text);
-        errorMessage = text;
-      } catch (err) {
-        console.error("[Auth] Could not read response text");
-      }
-      throw new Error(
-        errorMessage || `Login failed (status ${response.status})`
-      );
+      const text = await response.text();
+      throw new Error(text || `Login failed (status ${response.status})`);
     }
 
-    // If response is ok
     const data = await response.json();
-    console.log("[Auth] Login successful:", data);
+    console.log("[Auth] Login successful, raw data:", data);
 
-    localStorage.setItem("access_token", data.access_token);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    return data;
+    const user = data.user ?? data;
+
+    const userData = {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      created_at: user.created_at,
+      login_method: user.login_method || "email",
+      avatar_url:
+        user.avatar_url ||
+        data.avatar_url ||
+        `https://api.dicebear.com/9.x/adventurer/svg?seed=${user.username || username}`,
+      interests: Array.isArray(user.interests)
+        ? user.interests
+        : (typeof user.interests === "string"
+            ? (() => { try { return JSON.parse(user.interests); } catch { return []; } })()
+            : []),
+      access_token: data.access_token,
+      is_new_user: !!data.is_new_user,
+    };
+
+    localStorage.setItem("access_token", userData.access_token || "");
+    localStorage.setItem("user", JSON.stringify(userData));
+
+    console.log("[Auth] User saved to localStorage:", userData);
+    return userData; 
   } catch (error) {
     console.error("[Auth] Login failed:", error);
     throw error;
   }
 };
+
+
+
+
 
 /**
  * Logout user

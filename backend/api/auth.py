@@ -101,6 +101,17 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         
         logger.info(f"[Auth] New user registered: {new_user.username}")
         
+        # Safely parse interests
+        try:
+            if isinstance(new_user.interests, str):
+                parsed_interests = json.loads(new_user.interests)
+            elif isinstance(new_user.interests, list):
+                parsed_interests = new_user.interests
+            else:
+                parsed_interests = []
+        except (json.JSONDecodeError, TypeError):
+            parsed_interests = []
+        
         return {
             "access_token": access_token,
             "token_type": "bearer",
@@ -110,8 +121,11 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
                 "username": new_user.username,
                 "created_at": new_user.created_at.isoformat(),
                 "avatar_url": new_user.avatar_url,
-                "interests": json.loads(new_user.interests) if new_user.interests else [],
-            }
+                "interests": parsed_interests,
+            },
+            "avatar_url": new_user.avatar_url or f"https://api.dicebear.com/9.x/adventurer/svg?seed={new_user.username}",
+            "interests": parsed_interests if isinstance(parsed_interests, list) else [],
+            "is_new_user": True,
         }
     except HTTPException:
         raise
@@ -120,7 +134,8 @@ def register(user_data: UserRegister, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
-@router.post("/login", response_model=Token)
+# @router.post("/login", response_model=Token)
+@router.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     Handle login using OAuth2 form data (username + password)
@@ -162,7 +177,24 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     
     logger.info(f"[Auth] Login successful: {user.username}")
     
-    # Return complete user information
+    # Parse interests from JSON string to list
+    try:
+        parsed_interests = json.loads(user.interests) if user.interests else []
+    except (json.JSONDecodeError, TypeError):
+        parsed_interests = []
+    
+        # Parse interests safely
+    try:
+        parsed_interests = json.loads(user.interests) if user.interests else []
+    except (json.JSONDecodeError, TypeError):
+        parsed_interests = []
+
+    has_avatar = bool(user.avatar_url and user.avatar_url.strip())
+    has_interests = isinstance(parsed_interests, list) and len(parsed_interests) > 0
+
+    import datetime
+    is_new_user = (datetime.datetime.utcnow() - user.created_at).total_seconds() < 300
+
     return {
         "access_token": access_token,
         "token_type": "bearer",
@@ -171,13 +203,17 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             "username": user.username,
             "email": user.email,
             "created_at": user.created_at.isoformat(),
-            "avatar_url": user.avatar_url, 
-            "interests": user.interests or [], 
-            "login_method": user.login_method,
+            "login_method": user.login_method or "email",
+            "avatar_url": user.avatar_url or f"https://api.dicebear.com/9.x/adventurer/svg?seed={user.username}",
+            "interests": parsed_interests if isinstance(parsed_interests, list) else [],
         },
-        "avatar_url": user.avatar_url,  
-        "interests": user.interests or []  
+        # For frontend compatibility
+        "avatar_url": user.avatar_url or f"https://api.dicebear.com/9.x/adventurer/svg?seed={user.username}",
+        "interests": parsed_interests if isinstance(parsed_interests, list) else [],
+        "is_new_user": False,  
     }
+
+
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
@@ -279,6 +315,7 @@ async def google_callback(code: str, state: str = None):
         db.close()
 
 class UserUpdate(BaseModel):
+    username: Optional[str] = None
     interests: Optional[List[str]] = None
     avatar_url: Optional[str] = None
 
@@ -289,11 +326,23 @@ def update_user_profile(
     db: Session = Depends(get_db)
 ):
     """
-    Update the current user's interests and avatar URL.
+    Update the current user's profile (username, interests, avatar).
     """
     try:
         logger.info(f"[User Update] Updating user {current_user.username}")
         logger.info(f"[User Update] Data: {update_data}")
+        
+        if update_data.username is not None:
+            # Check if username is already taken
+            existing_user = db.query(User).filter(
+                User.username == update_data.username,
+                User.id != current_user.id
+            ).first()
+            if existing_user:
+                raise HTTPException(status_code=400, detail="Username already taken")
+            
+            current_user.username = update_data.username
+            logger.info(f"[User Update] Set username: {update_data.username}")
         
         if update_data.interests is not None:
             # Convert list to JSON string for SQLite
@@ -309,14 +358,27 @@ def update_user_profile(
         
         logger.info(f"[User Update] Update successful")
 
+        # Safely parse interests - handle both string and list
+        try:
+            if isinstance(current_user.interests, str):
+                parsed_interests = json.loads(current_user.interests)
+            elif isinstance(current_user.interests, list):
+                parsed_interests = current_user.interests
+            else:
+                parsed_interests = []
+        except (json.JSONDecodeError, TypeError):
+            parsed_interests = []
+
         return {
             "id": current_user.id,
             "email": current_user.email,
             "username": current_user.username,
-            "interests": json.loads(current_user.interests) if current_user.interests else [],  # ← Convert back to list
+            "interests": parsed_interests,
             "avatar_url": current_user.avatar_url,
             "created_at": current_user.created_at.isoformat(),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"[User Update] ERROR: {str(e)}", exc_info=True)
         db.rollback()

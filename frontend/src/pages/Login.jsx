@@ -98,27 +98,23 @@ export default function Login() {
           password: formData.password,
         });
 
-        console.log("[Login] User data received:", response.user);
+        console.log("[Login] User data received:", response);
 
-        // Check if profile is complete
-        const hasAvatar =
-          response.user.avatar_url && response.user.avatar_url.trim() !== "";
-        const hasInterests =
-          response.user.interests && response.user.interests.length > 0;
+        // Simplified logic based on backend data
+        const hasAvatar = response.avatar_url?.trim() !== "";
+        const hasInterests = Array.isArray(response.interests) && response.interests.length > 0;
 
-        console.log("[Login] Profile check:", { hasAvatar, hasInterests });
-
-        if (!hasAvatar || !hasInterests) {
-          // Profile incomplete - redirect to welcome page
-          console.log(
-            "[Login] Profile incomplete, redirecting to welcome page"
-          );
+        // if backend provides is_new_user
+        if (response.is_new_user || !hasAvatar || !hasInterests) {
+          console.log("[Login] New or incomplete profile → /welcome");
           navigate("/welcome");
         } else {
-          // Profile complete - go to homepage
-          console.log("[Login] Profile complete, redirecting to homepage");
+          console.log("[Login] Existing complete user → /");
           navigate("/");
         }
+
+
+
       } else {
         // Registration
         response = await register({

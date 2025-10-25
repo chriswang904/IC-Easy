@@ -131,6 +131,17 @@ export default function Homepage() {
     }
   };
 
+  useEffect(() => {
+    const handleProfileUpdate = (event) => {
+      console.log("[Homepage] Detected profile-updated event, refreshing...");
+      loadUserData();
+      loadRecommendations();
+    };
+    window.addEventListener("profile-updated", handleProfileUpdate);
+    return () => window.removeEventListener("profile-updated", handleProfileUpdate);
+  }, []);
+
+
   // Initial load on mount + reload on navigation back
   useEffect(() => {
     console.log("[Homepage] Component mounted/re-mounted");
