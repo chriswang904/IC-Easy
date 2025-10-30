@@ -434,37 +434,44 @@ export default function EssayEditor() {
     try {
       console.log("[Sync] Starting sync to document:", currentGoogleDocId);
 
-      // Ensure token is set
+      // Ensure token is valid
       window.gapi.client.setToken({ access_token: accessToken });
 
-      // Get the current content from the Google Doc
+      // Get document metadata
       const docResponse = await window.gapi.client.docs.documents.get({
         documentId: currentGoogleDocId,
       });
-
       console.log("[Sync] Retrieved document structure");
 
-      // Clear existing content and insert new content
+      // Extract editor content
       const plainText = editorRef.current
-        ? editorRef.current.textContent
-        : inputText;
+        ? editorRef.current.textContent?.trim()
+        : inputText?.trim();
 
+      if (!plainText || plainText.length === 0) {
+        console.warn("[Sync] Skipped empty content update.");
+        setIsSyncing(false);
+        setError("Document is empty — nothing to sync.");
+        setTimeout(() => setError(null), 3000);
+        return;
+      }
+
+      // endIndex
+      const content = docResponse.result.body?.content || [];
       const endIndex =
-        docResponse.result.body.content[
-          docResponse.result.body.content.length - 1
-        ].endIndex - 1;
+        content.length > 0
+          ? content[content.length - 1].endIndex - 1
+          : 1;
 
-      console.log("[Sync] Updating content...");
+      console.log("[Sync] Updating content... (chars:", plainText.length, ")");
 
+      // Update documentation
       await window.gapi.client.docs.documents.batchUpdate({
         documentId: currentGoogleDocId,
         requests: [
           {
             deleteContentRange: {
-              range: {
-                startIndex: 1,
-                endIndex: endIndex,
-              },
+              range: { startIndex: 1, endIndex: endIndex },
             },
           },
           {
@@ -488,7 +495,6 @@ export default function EssayEditor() {
       });
 
       let errorMessage = "Failed to sync with Google Docs";
-
       if (error.status === 401) {
         errorMessage = "Authentication expired. Please sign in again.";
         setIsGoogleSignedIn(false);
@@ -506,6 +512,17 @@ export default function EssayEditor() {
     }
   };
 
+  let syncCooldown = false;
+
+  const safeSync = async () => {
+    if (syncCooldown) {
+      console.warn("[Sync] Cooldown active, ignoring click.");
+      return;
+    }
+    syncCooldown = true;
+    await syncToGoogleDoc();
+    setTimeout(() => (syncCooldown = false), 3000); // 3 秒冷却
+  };
   // Load content from selected Google Doc
   const loadFromGoogleDoc = async (docId) => {
     if (!gapiReady || !window.gapi?.client?.docs) {
@@ -1022,7 +1039,7 @@ export default function EssayEditor() {
                 {/* Sync Button (shown when linked) */}
                 {currentGoogleDocId && (
                   <button
-                    onClick={syncToGoogleDoc}
+                    onClick={safeSync}
                     disabled={isSyncing}
                     className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
                   >
@@ -1770,7 +1787,7 @@ export default function EssayEditor() {
 
                     {currentGoogleDocId && (
                       <button
-                        onClick={syncToGoogleDoc}
+                        onClick={safeSync}
                         disabled={isSyncing}
                         className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-4 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
                       >

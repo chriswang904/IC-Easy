@@ -195,13 +195,19 @@ def get_recommendations_multi_source(topics: List[str], limit: int = 15) -> List
         
         # Combine results
         for paper in openalex_papers + arxiv_papers:
-            title_lower = paper["title"].lower()
+            title = paper.get("title")
+            if not title: 
+                logger.warning(f"[Multi-Source] Skipping paper with missing title: {paper}")
+                continue
+
+            title_lower = title.lower()
             if title_lower not in seen_titles:
                 seen_titles.add(title_lower)
                 all_papers.append(paper)
-                
+
                 if len(all_papers) >= limit:
                     break
+
         
         if len(all_papers) >= limit:
             break
