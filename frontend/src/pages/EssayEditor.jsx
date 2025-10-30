@@ -1,128 +1,285 @@
-import React, { useState, useEffect } from "react";
+// pages/PolishPage.jsx
+
+import React, { useState, useEffect, useRef } from "react";
 import {
-  ArrowLeft,
-  Plus,
-  FolderOpen,
-  FileText,
-  LogIn,
-  LogOut,
-  ExternalLink,
-  Trash2,
-  AlertCircle,
   RefreshCw,
+  Loader,
+  AlertCircle,
+  CheckCheck,
+  X,
+  Wand2,
+  Type,
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  List,
+  ListOrdered,
+  Table,
+  Heading1,
+  Heading2,
+  Heading3,
+  Link,
+  Minus,
+  Quote,
+  Sparkles,
+  FileCheck,
+  Search,
+  Shield,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
+  Download,
+  Upload,
+  Cloud,
+  CloudUpload,
+  Save,
+  FolderOpen,
+  LogIn,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
+import { checkAIOnly } from "../api";
 import { getStoredUser } from "../api/auth";
 
-function EssayEditor() {
-  const navigate = useNavigate();
-  const [isSignedIn, setIsSignedIn] = useState(false);
-  const [documentId, setDocumentId] = useState(null);
-  const [gapiReady, setGapiReady] = useState(false);
-  const [accessToken, setAccessToken] = useState(null);
-  const [recentDocs, setRecentDocs] = useState([]);
-  const [documentTitle, setDocumentTitle] = useState("New Document");
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
+export default function EssayEditor() {
+  const [inputText, setInputText] = useState("");
+  const [selectedText, setSelectedText] = useState("");
+  const [selectionRange, setSelectionRange] = useState(null);
   const [error, setError] = useState(null);
-  const [tokenExpired, setTokenExpired] = useState(false);
 
-  // Initialize Google API client when component loads
+  // AI Panel state
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [activeTab, setActiveTab] = useState("grammar");
+
+  // Rephrase state
+  const [tone, setTone] = useState("as-is");
+  const [length, setLength] = useState("as-is");
+  const [isRephrasing, setIsRephrasing] = useState(false);
+  const [rephrasedResult, setRephrasedResult] = useState("");
+
+  // Plagiarism check state
+  const [isCheckingPlagiarism, setIsCheckingPlagiarism] = useState(false);
+  const [plagiarismResult, setPlagiarismResult] = useState(null);
+
+  // Table modal state
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableCols, setTableCols] = useState(3);
+
+  // Dynamic checking state
+  const [isChecking, setIsChecking] = useState(false);
+  const checkTimeoutRef = useRef(null);
+
+  // Interactive corrections state
+  const [corrections, setCorrections] = useState([]);
+  const editorRef = useRef(null);
+  const isUpdatingRef = useRef(false);
+
+  // NEW: Google Docs integration state
+  const [showGoogleDocsModal, setShowGoogleDocsModal] = useState(false);
+  const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
+  const [accessToken, setAccessToken] = useState(null);
+  const [gapiReady, setGapiReady] = useState(false);
+  const [googleDocs, setGoogleDocs] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [currentGoogleDocId, setCurrentGoogleDocId] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Initialize Google API client
   useEffect(() => {
-    const initGapi = () => {
-      window.gapi.load("client", async () => {
-        try {
-          await window.gapi.client.init({
-            apiKey: process.env.REACT_APP_GOOGLE_API_KEY,
+    const initGapi = async () => {
+      console.log("[Google Docs] Starting GAPI initialization...");
+
+      try {
+        // Check if gapi.client is already initialized
+        if (window.gapi?.client?.docs && window.gapi?.client?.drive) {
+          console.log(
+            "[Google Docs] ✓ GAPI already initialized from another component!"
+          );
+          setGapiReady(true);
+          setError(null);
+          return;
+        }
+
+        // Load client library
+        await new Promise((resolve, reject) => {
+          window.gapi.load("client", {
+            callback: resolve,
+            onerror: reject,
           });
+        });
+
+        console.log("[Google Docs] Client library loaded");
+
+        // Initialize WITHOUT API key (we're using OAuth tokens)
+        console.log("[Google Docs] Initializing GAPI client for OAuth...");
+        await window.gapi.client.init({
+          // No apiKey needed - we'll use the OAuth access token
+        });
+        console.log("[Google Docs] GAPI client initialized for OAuth");
+
+        // Load APIs
+        if (!window.gapi.client.docs) {
+          console.log("[Google Docs] Loading Docs API...");
           await window.gapi.client.load(
             "https://docs.googleapis.com/$discovery/rest?version=v1"
           );
+          console.log("[Google Docs] Docs API loaded");
+        }
+
+        if (!window.gapi.client.drive) {
+          console.log("[Google Docs] Loading Drive API...");
           await window.gapi.client.load(
             "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"
           );
-          console.log("[Google Docs] GAPI initialized");
-          setGapiReady(true);
-        } catch (error) {
-          console.error("[Google Docs] GAPI init failed:", error);
-          setError("Failed to initialize Google API");
+          console.log("[Google Docs] Drive API loaded");
         }
-      });
+
+        // Final verification
+        const docsLoaded = !!window.gapi.client.docs;
+        const driveLoaded = !!window.gapi.client.drive;
+
+        console.log(
+          "[Google Docs] Final check - Docs API:",
+          docsLoaded,
+          "Drive API:",
+          driveLoaded
+        );
+
+        if (docsLoaded && driveLoaded) {
+          console.log("[Google Docs] ✓ All APIs ready!");
+          setGapiReady(true);
+          setError(null);
+        } else {
+          console.error("[Google Docs] APIs not properly loaded");
+          setError("Some Google APIs failed to load. Please refresh the page.");
+        }
+      } catch (error) {
+        console.error("[Google Docs] GAPI init error:", error);
+        console.error("[Google Docs] Error details:", {
+          message: error.message,
+          stack: error.stack,
+        });
+
+        setError(
+          `API initialization failed: ${error.message}. Check browser console for details.`
+        );
+      }
     };
 
+    // Check if gapi script already exists and is loaded
+    const existingScript = document.querySelector(
+      'script[src="https://apis.google.com/js/api.js"]'
+    );
+
+    if (existingScript && window.gapi) {
+      console.log("[Google Docs] GAPI script already loaded, initializing...");
+      initGapi();
+      return;
+    }
+
+    if (existingScript && !window.gapi) {
+      console.log(
+        "[Google Docs] GAPI script exists but not loaded yet, waiting..."
+      );
+      existingScript.onload = initGapi;
+      return;
+    }
+
+    // Load the gapi script
+    console.log("[Google Docs] Loading GAPI script...");
     const gapiScript = document.createElement("script");
     gapiScript.src = "https://apis.google.com/js/api.js";
-    gapiScript.onload = initGapi;
+    gapiScript.async = true;
+    gapiScript.defer = true;
+    gapiScript.onload = () => {
+      console.log("[Google Docs] GAPI script loaded successfully");
+      initGapi();
+    };
+    gapiScript.onerror = (e) => {
+      console.error("[Google Docs] Failed to load GAPI script:", e);
+      setError(
+        "Failed to load Google API script. Please check your internet connection and refresh."
+      );
+    };
+
     document.body.appendChild(gapiScript);
 
     return () => {
-      if (document.body.contains(gapiScript)) {
-        document.body.removeChild(gapiScript);
-      }
+      // Don't remove the script on unmount
     };
   }, []);
 
-  // Check user type: Google user or local user
+  // Check for Google user
   useEffect(() => {
     const user = getStoredUser();
-    if (user) {
-      if (user.google_access_token) {
-        console.log("[Google Docs] Google user detected");
-        setAccessToken(user.google_access_token);
-        setIsSignedIn(true);
-      } else {
-        console.log("[Local Docs] Local user detected");
-        setIsSignedIn(true);
-        loadLocalDocs();
-      }
+    if (user?.google_access_token) {
+      setAccessToken(user.google_access_token);
+      setIsGoogleSignedIn(true);
     }
   }, []);
 
-  // Load Google Docs if Google account detected
+  // Load Google Docs when signed in
   useEffect(() => {
-    if (accessToken && gapiReady) {
+    if (accessToken && gapiReady && window.gapi?.client) {
+      console.log("[Google Docs] Setting up token and loading docs...");
       window.gapi.client.setToken({ access_token: accessToken });
-      loadRecentDocs();
+      loadGoogleDocs();
     }
   }, [accessToken, gapiReady]);
 
-  // Load local documents from localStorage
-  const loadLocalDocs = () => {
-    const localDocs = JSON.parse(localStorage.getItem("local_docs") || "[]");
-    setRecentDocs(localDocs);
-    console.log("[Local Docs] Loaded local docs:", localDocs);
-  };
-
   // Load Google Docs list
-  const loadRecentDocs = async () => {
+  const loadGoogleDocs = async () => {
+    if (!gapiReady || !window.gapi?.client?.drive) {
+      console.log("[Google Docs] GAPI not ready yet");
+      return;
+    }
+
+    if (!accessToken) {
+      console.log("[Google Docs] No access token available");
+      return;
+    }
+
     try {
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
+
+      console.log("[Google Docs] Loading documents...");
       const response = await window.gapi.client.drive.files.list({
         pageSize: 10,
         fields: "files(id, name, modifiedTime, webViewLink)",
         q: "mimeType='application/vnd.google-apps.document' and trashed=false",
         orderBy: "modifiedTime desc",
       });
-      setRecentDocs(response.result.files || []);
+      setGoogleDocs(response.result.files || []);
       setError(null);
-      setTokenExpired(false);
-      console.log("[Google Docs] Loaded recent documents");
+      console.log(
+        "[Google Docs] Loaded",
+        response.result.files?.length || 0,
+        "documents"
+      );
     } catch (error) {
       console.error("[Google Docs] Error loading docs:", error);
       if (error.status === 401) {
-        setTokenExpired(true);
         setError("Your Google session has expired. Please sign in again.");
-        setIsSignedIn(false);
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
       } else {
-        setError("Failed to load documents");
+        setError("Failed to load Google Docs. Please try again.");
       }
     }
   };
 
   // Handle Google Sign-in
-  const handleSignIn = async () => {
+  const handleGoogleSignIn = async () => {
     try {
-      localStorage.setItem("redirect_after_login", "/essay/new");
-      const response = await fetch("http://localhost:8000/api/auth/google/login");
+      localStorage.setItem("redirect_after_login", window.location.pathname);
+      const response = await fetch(
+        "http://localhost:8000/api/auth/google/login"
+      );
       const data = await response.json();
       if (data.auth_url) {
         window.location.href = data.auth_url;
@@ -133,352 +290,1665 @@ function EssayEditor() {
     }
   };
 
-  // Handle Sign-out
-  const handleSignOut = () => {
-    setAccessToken(null);
-    setIsSignedIn(false);
-    setDocumentId(null);
-    setRecentDocs([]);
-    if (window.gapi?.client) window.gapi.client.setToken(null);
-    const user = getStoredUser();
-    if (user) {
-      delete user.google_access_token;
-      localStorage.setItem("user", JSON.stringify(user));
+  // Upload current document to Google Docs
+  const uploadToGoogleDocs = async () => {
+    if (!isGoogleSignedIn) {
+      setError("Please sign in with Google first");
+      setTimeout(() => setError(null), 3000);
+      return;
     }
-  };
 
-  // Create a new document (Google or Local)
-  const createNewDoc = async () => {
+    if (!inputText.trim()) {
+      setError("Please write some content before uploading");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // Check if GAPI is ready
+    if (!gapiReady || !window.gapi?.client?.docs) {
+      setError("Google API not ready. Please wait a moment and try again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // Check if token is set
+    if (!accessToken) {
+      setError("Google authentication token not found. Please sign in again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const title = prompt("Enter document title:", "Polished Document");
+    if (!title) return;
+
+    setIsUploading(true);
+    setError(null);
+
     try {
-      const user = getStoredUser();
-      // Local user mode
-      if (!user?.google_access_token) {
-        const localDocs = JSON.parse(localStorage.getItem("local_docs") || "[]");
-        if (localDocs.length >= 5) {
-          alert("Free users can only create up to 5 local documents.");
-          return;
-        }
-        const title = prompt("Enter document title:", "Untitled Document");
-        if (!title) return;
+      console.log("[Upload] Starting upload process...");
 
-        const newDocId = `local-${Date.now()}`;
-        const newDoc = {
-          id: newDocId,
-          name: title,
-          createdAt: new Date().toISOString(),
-        };
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
 
-        const updatedDocs = [...localDocs, newDoc].slice(-5);
-        localStorage.setItem("local_docs", JSON.stringify(updatedDocs));
-        localStorage.setItem(newDocId, "");
-        setDocumentId(newDocId);
-        setDocumentTitle(title);
-        loadLocalDocs();
-        alert("New local document created successfully!");
-        return;
+      // Get plain text content
+      const plainText = editorRef.current
+        ? editorRef.current.textContent
+        : inputText;
+
+      console.log("[Upload] Creating document with title:", title);
+
+      // Create new Google Doc
+      const createResponse = await window.gapi.client.docs.documents.create({
+        title: title,
+      });
+
+      if (!createResponse?.result?.documentId) {
+        throw new Error("Failed to create document - no document ID returned");
       }
 
-      // Google Docs mode
-      const title = prompt("Enter document title:", "Untitled Document");
-      if (!title) return;
-      const response = await window.gapi.client.docs.documents.create({ title });
-      const newDocId = response.result.documentId;
-      setDocumentId(newDocId);
-      setDocumentTitle(title);
-      loadRecentDocs();
-      console.log("[Google Docs] Created new document:", newDocId);
+      const docId = createResponse.result.documentId;
+      console.log("[Upload] Document created with ID:", docId);
+
+      // Insert content into the document
+      console.log("[Upload] Inserting content...");
+      await window.gapi.client.docs.documents.batchUpdate({
+        documentId: docId,
+        requests: [
+          {
+            insertText: {
+              location: { index: 1 },
+              text: plainText,
+            },
+          },
+        ],
+      });
+
+      console.log("[Upload] Content inserted successfully");
+      setCurrentGoogleDocId(docId);
+      await loadGoogleDocs();
+
+      setIsUploading(false);
+      setShowGoogleDocsModal(false);
+
+      alert(`Document "${title}" uploaded successfully to Google Docs!`);
+
+      // Ask if user wants to open it
+      const openNow = window.confirm(
+        "Would you like to open the document in Google Docs?"
+      );
+      if (openNow) {
+        window.open(
+          `https://docs.google.com/document/d/${docId}/edit`,
+          "_blank"
+        );
+      }
     } catch (error) {
-      console.error("[Create Doc Error]:", error);
-      setError("Failed to create document");
+      console.error("[Upload Error]:", error);
+      console.error("[Upload Error Details]:", {
+        status: error.status,
+        statusText: error.statusText,
+        message: error.message,
+        result: error.result,
+      });
+
+      let errorMessage = "Failed to upload to Google Docs";
+
+      if (error.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else if (error.status === 403) {
+        errorMessage =
+          "Permission denied. Please check your Google account permissions.";
+      } else if (error.status === 404) {
+        errorMessage = "Google Docs API not found. Please check your setup.";
+      } else if (error.message) {
+        errorMessage = `Upload failed: ${error.message}`;
+      }
+
+      setError(errorMessage);
+      setIsUploading(false);
+
+      // Keep error visible longer
+      setTimeout(() => setError(null), 5000);
     }
   };
 
-  // Open a Google Doc by ID (for Google users)
-  const handleOpenByID = () => {
-    const docId = prompt("Enter the Google Document ID:");
-    if (docId) {
-      setDocumentId(docId);
-      setDocumentTitle("Imported Google Document");
+  // Sync changes to existing Google Doc
+  const syncToGoogleDoc = async () => {
+    if (!currentGoogleDocId) {
+      setError("No Google Doc linked. Please upload first.");
+      setTimeout(() => setError(null), 3000);
+      return;
     }
-  };
 
+    if (!gapiReady || !window.gapi?.client?.docs) {
+      setError("Google API not ready. Please wait a moment and try again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
 
-  // Open selected document
-  const openDocument = (docId, docName) => {
-    setDocumentId(docId);
-    setDocumentTitle(docName);
-  };
+    setIsSyncing(true);
+    setError(null);
 
-  // Delete document
-  const deleteDocument = (docId, docName) => {
-    setDeleteConfirm({ docId, docName });
-  };
-
-  // Confirm delete
-  const confirmDelete = async () => {
-    if (!deleteConfirm) return;
-    const { docId } = deleteConfirm;
     try {
-      if (accessToken) {
-        // Delete from Google Drive
-        await window.gapi.client.drive.files.delete({ fileId: docId });
-        loadRecentDocs();
-      } else {
-        // Delete from localStorage
-        const localDocs = JSON.parse(localStorage.getItem("local_docs") || "[]");
-        const updatedDocs = localDocs.filter((d) => d.id !== docId);
-        localStorage.setItem("local_docs", JSON.stringify(updatedDocs));
-        localStorage.removeItem(docId);
-        loadLocalDocs();
-      }
-      if (documentId === docId) setDocumentId(null);
-      setDeleteConfirm(null);
-    } catch (error) {
-      console.error("[Delete Error]:", error);
-      setError("Failed to delete document");
-    }
-  };
+      console.log("[Sync] Starting sync to document:", currentGoogleDocId);
 
-  // Sync all local docs to Google Docs
-  const syncLocalToGoogle = async () => {
-    try {
-      if (!accessToken) {
-        alert("You need to sign in with Google first!");
-        return;
-      }
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
 
-      const localDocs = JSON.parse(localStorage.getItem("local_docs") || "[]");
-      if (localDocs.length === 0) {
-        alert("No local documents to sync.");
-        return;
-      }
+      // Get the current content from the Google Doc
+      const docResponse = await window.gapi.client.docs.documents.get({
+        documentId: currentGoogleDocId,
+      });
 
-      for (const doc of localDocs) {
-        const content = localStorage.getItem(doc.id) || "";
-        const newDoc = await window.gapi.client.docs.documents.create({
-          title: doc.name,
-        });
-        const newDocId = newDoc.result.documentId;
+      console.log("[Sync] Retrieved document structure");
 
-        await window.gapi.client.docs.documents.batchUpdate({
-          documentId: newDocId,
-          requests: [
-            {
-              insertText: {
-                location: { index: 1 },
-                text: content,
+      // Clear existing content and insert new content
+      const plainText = editorRef.current
+        ? editorRef.current.textContent
+        : inputText;
+
+      const endIndex =
+        docResponse.result.body.content[
+          docResponse.result.body.content.length - 1
+        ].endIndex - 1;
+
+      console.log("[Sync] Updating content...");
+
+      await window.gapi.client.docs.documents.batchUpdate({
+        documentId: currentGoogleDocId,
+        requests: [
+          {
+            deleteContentRange: {
+              range: {
+                startIndex: 1,
+                endIndex: endIndex,
               },
             },
-          ],
-        });
+          },
+          {
+            insertText: {
+              location: { index: 1 },
+              text: plainText,
+            },
+          },
+        ],
+      });
 
-        console.log(`[Sync] Uploaded '${doc.name}' (${newDocId})`);
-      }
-
-      alert("All local documents have been uploaded to Google Docs.");
-      localStorage.removeItem("local_docs");
-      loadRecentDocs();
+      console.log("[Sync] Content updated successfully");
+      alert("Document synced successfully!");
+      setIsSyncing(false);
     } catch (error) {
       console.error("[Sync Error]:", error);
-      alert("Failed to sync local documents. Please try again.");
+      console.error("[Sync Error Details]:", {
+        status: error.status,
+        statusText: error.statusText,
+        message: error.message,
+      });
+
+      let errorMessage = "Failed to sync with Google Docs";
+
+      if (error.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else if (error.status === 404) {
+        errorMessage = "Document not found. It may have been deleted.";
+        setCurrentGoogleDocId(null);
+      } else if (error.message) {
+        errorMessage = `Sync failed: ${error.message}`;
+      }
+
+      setError(errorMessage);
+      setIsSyncing(false);
+      setTimeout(() => setError(null), 5000);
     }
   };
 
-  // Render section
+  // Load content from selected Google Doc
+  const loadFromGoogleDoc = async (docId) => {
+    if (!gapiReady || !window.gapi?.client?.docs) {
+      setError("Google API not ready. Please wait a moment and try again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    try {
+      console.log("[Load] Loading document:", docId);
+
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
+
+      const response = await window.gapi.client.docs.documents.get({
+        documentId: docId,
+      });
+
+      console.log("[Load] Document retrieved");
+
+      // Extract text content
+      let text = "";
+      response.result.body.content.forEach((element) => {
+        if (element.paragraph) {
+          element.paragraph.elements.forEach((elem) => {
+            if (elem.textRun) {
+              text += elem.textRun.content;
+            }
+          });
+        }
+      });
+
+      console.log("[Load] Extracted", text.length, "characters");
+
+      setInputText(text);
+      if (editorRef.current) {
+        editorRef.current.textContent = text;
+      }
+      setCurrentGoogleDocId(docId);
+      setShowGoogleDocsModal(false);
+
+      alert("Document loaded successfully! You can now edit and sync changes.");
+    } catch (error) {
+      console.error("[Load Error]:", error);
+      console.error("[Load Error Details]:", {
+        status: error.status,
+        statusText: error.statusText,
+        message: error.message,
+      });
+
+      let errorMessage = "Failed to load document from Google Docs";
+
+      if (error.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else if (error.status === 404) {
+        errorMessage = "Document not found. It may have been deleted.";
+      } else if (error.status === 403) {
+        errorMessage =
+          "Permission denied. You don't have access to this document.";
+      } else if (error.message) {
+        errorMessage = `Load failed: ${error.message}`;
+      }
+
+      setError(errorMessage);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // (Keep all existing grammar check logic unchanged...)
+  useEffect(() => {
+    if (checkTimeoutRef.current) {
+      clearTimeout(checkTimeoutRef.current);
+    }
+
+    if (
+      editorRef.current?.querySelector("ul, ol, h1, h2, h3, blockquote, table")
+    ) {
+      setCorrections([]);
+      return;
+    }
+
+    if (!inputText.trim() || inputText.trim().length < 3) {
+      setCorrections([]);
+      return;
+    }
+
+    setIsChecking(true);
+
+    checkTimeoutRef.current = setTimeout(async () => {
+      await performGrammarCheck(inputText);
+      setIsChecking(false);
+    }, 800);
+
+    return () => {
+      if (checkTimeoutRef.current) {
+        clearTimeout(checkTimeoutRef.current);
+      }
+    };
+  }, [inputText]);
+
+  const performGrammarCheck = async (text) => {
+    const plainText = editorRef.current ? editorRef.current.textContent : text;
+
+    if ("Proofreader" in window && window.Proofreader) {
+      try {
+        const availability = await window.Proofreader.availability();
+        if (availability === "no") {
+          setCorrections([]);
+          return;
+        }
+
+        const proofreader = await window.Proofreader.create();
+        const proofreadResult = await proofreader.proofread(plainText);
+
+        if (
+          !proofreadResult.corrections ||
+          proofreadResult.corrections.length === 0
+        ) {
+          proofreader.destroy();
+          setCorrections([]);
+          return;
+        }
+
+        const correctionsWithIds = proofreadResult.corrections.map(
+          (corr, idx) => ({
+            ...corr,
+            id: `correction-${idx}-${Date.now()}`,
+            original: plainText.slice(corr.startIndex, corr.endIndex),
+            applied: false,
+          })
+        );
+
+        setCorrections(correctionsWithIds);
+        proofreader.destroy();
+      } catch (err) {
+        console.error("[Grammar Check] Error:", err);
+        setCorrections([]);
+      }
+    } else {
+      setCorrections([]);
+    }
+  };
+
+  const applyGrammarHighlights = () => {
+    if (!editorRef.current || corrections.length === 0) return;
+
+    const hasLists = editorRef.current.querySelector(
+      "ul, ol, li, h1, h2, h3, blockquote, table"
+    );
+    if (hasLists) {
+      return;
+    }
+
+    const textContent = editorRef.current.textContent;
+    const selection = window.getSelection();
+    let cursorPosition = 0;
+
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(editorRef.current);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      cursorPosition = preCaretRange.toString().length;
+    }
+
+    let segments = [];
+    let lastIndex = 0;
+
+    const sortedForward = [...corrections].sort(
+      (a, b) => a.startIndex - b.startIndex
+    );
+
+    sortedForward.forEach((correction) => {
+      if (correction.startIndex > lastIndex) {
+        segments.push({
+          text: textContent.substring(lastIndex, correction.startIndex),
+          isError: false,
+        });
+      }
+
+      segments.push({
+        text: textContent.substring(correction.startIndex, correction.endIndex),
+        isError: true,
+        correctionId: correction.id,
+        correction: correction,
+      });
+
+      lastIndex = correction.endIndex;
+    });
+
+    if (lastIndex < textContent.length) {
+      segments.push({
+        text: textContent.substring(lastIndex),
+        isError: false,
+      });
+    }
+
+    let newHTML = "";
+    segments.forEach((segment) => {
+      const escapedText = segment.text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br>");
+
+      if (segment.isError) {
+        newHTML += `<span class="grammar-error" data-correction-id="${segment.correctionId}">${escapedText}</span>`;
+      } else {
+        newHTML += escapedText;
+      }
+    });
+
+    editorRef.current.innerHTML = newHTML;
+
+    try {
+      const range = document.createRange();
+      const sel = window.getSelection();
+      let charCount = 0;
+      let nodeStack = [editorRef.current];
+      let node,
+        foundStart = false;
+
+      while (!foundStart && (node = nodeStack.pop())) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const nextCharCount = charCount + node.length;
+          if (cursorPosition <= nextCharCount) {
+            range.setStart(node, cursorPosition - charCount);
+            range.collapse(true);
+            foundStart = true;
+          }
+          charCount = nextCharCount;
+        } else {
+          for (let i = node.childNodes.length - 1; i >= 0; i--) {
+            nodeStack.push(node.childNodes[i]);
+          }
+        }
+      }
+
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {
+      console.log("Cursor restoration failed:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (!isUpdatingRef.current && corrections.length > 0) {
+      applyGrammarHighlights();
+    }
+  }, [corrections]);
+
+  const handleInput = (e) => {
+    isUpdatingRef.current = true;
+    const text = e.target.textContent || "";
+    setInputText(text);
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 0);
+  };
+
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    const selected = selection.toString().trim();
+
+    if (
+      selected.length > 0 &&
+      editorRef.current?.contains(selection.anchorNode)
+    ) {
+      setSelectedText(selected);
+
+      const range = selection.getRangeAt(0);
+      const preSelectionRange = range.cloneRange();
+      preSelectionRange.selectNodeContents(editorRef.current);
+      preSelectionRange.setEnd(range.startContainer, range.startOffset);
+      const start = preSelectionRange.toString().length;
+
+      setSelectionRange({
+        start: start,
+        end: start + selected.length,
+      });
+    } else {
+      setSelectedText("");
+      setSelectionRange(null);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener("selectionchange", handleTextSelection);
+    return () => {
+      document.removeEventListener("selectionchange", handleTextSelection);
+    };
+  }, []);
+
+  const handleRephrase = async () => {
+    const textToRephrase = selectedText || inputText;
+
+    if (!textToRephrase.trim()) {
+      setError("Please select or write some text to rewrite!");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setIsRephrasing(true);
+    setRephrasedResult("");
+
+    if ("Rewriter" in window && window.Rewriter) {
+      try {
+        const availability = await window.Rewriter.availability();
+
+        if (availability === "no") {
+          setRephrasedResult(
+            "⚠️ Chrome Rewriter API is not available in this browser."
+          );
+          setIsRephrasing(false);
+          return;
+        }
+
+        const options = {
+          tone: tone,
+          format: "plain-text",
+          length: length,
+        };
+
+        const rewriter = await window.Rewriter.create(options);
+        const stream = rewriter.rewriteStreaming(textToRephrase);
+        let rephrased = "";
+
+        for await (const chunk of stream) {
+          rephrased += chunk;
+          setRephrasedResult(rephrased);
+        }
+
+        rewriter.destroy();
+      } catch (err) {
+        console.error("[Rephrase] Error:", err);
+        setRephrasedResult(`⚠️ Error: ${err.message}`);
+      }
+    } else {
+      setRephrasedResult(
+        "⚠️ Chrome Rewriter API is not available in this browser."
+      );
+    }
+
+    setIsRephrasing(false);
+  };
+
+  const handleUseRephrasedText = () => {
+    isUpdatingRef.current = true;
+
+    if (selectedText && selectionRange) {
+      const newText =
+        inputText.substring(0, selectionRange.start) +
+        rephrasedResult +
+        inputText.substring(selectionRange.end);
+      setInputText(newText);
+      if (editorRef.current) {
+        editorRef.current.textContent = newText;
+      }
+    } else {
+      setInputText(rephrasedResult);
+      if (editorRef.current) {
+        editorRef.current.textContent = rephrasedResult;
+      }
+    }
+
+    setRephrasedResult("");
+    setSelectedText("");
+    setSelectionRange(null);
+
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 100);
+  };
+
+  const handlePlagiarismCheck = async () => {
+    const textToCheck = inputText.trim();
+
+    if (!textToCheck) {
+      setError("Please write some text to check for originality!");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setIsCheckingPlagiarism(true);
+    setPlagiarismResult(null);
+    setError(null);
+
+    try {
+      const blob = new Blob([textToCheck], { type: "text/plain" });
+      const file = new File([blob], "document.txt", { type: "text/plain" });
+
+      console.log("[Originality Check] Checking document...");
+      const result = await checkAIOnly(file, true);
+
+      console.log("[Originality Check] Result:", result);
+      setPlagiarismResult(result);
+    } catch (err) {
+      console.error("[Originality Check] Error:", err);
+      if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
+        setError(
+          "Analysis is taking longer than expected. The models are loading for the first time. Please try again - it will be faster next time!"
+        );
+      } else {
+        const backendDetail = err.response?.data?.detail;
+        if (Array.isArray(backendDetail)) {
+          setError(backendDetail[0]?.msg || JSON.stringify(backendDetail));
+        } else if (typeof backendDetail === "object") {
+          setError(backendDetail?.msg || JSON.stringify(backendDetail));
+        } else {
+          setError(err.message || "An error occurred during originality check");
+        }
+      }
+    } finally {
+      setIsCheckingPlagiarism(false);
+    }
+  };
+
+  // Formatting functions
+  const execCommand = (command, value = null) => {
+    document.execCommand(command, false, value);
+    editorRef.current?.focus();
+  };
+
+  const handleBold = () => execCommand("bold");
+  const handleItalic = () => execCommand("italic");
+  const handleUnderline = () => execCommand("underline");
+  const handleAlignLeft = () => execCommand("justifyLeft");
+  const handleAlignCenter = () => execCommand("justifyCenter");
+  const handleAlignRight = () => execCommand("justifyRight");
+  const handleAlignJustify = () => execCommand("justifyFull");
+
+  const handleH1 = () => execCommand("formatBlock", "<h1>");
+  const handleH2 = () => execCommand("formatBlock", "<h2>");
+  const handleH3 = () => execCommand("formatBlock", "<h3>");
+  const handleBlockquote = () => execCommand("formatBlock", "<blockquote>");
+  const handleParagraph = () => execCommand("formatBlock", "<p>");
+  const handleHorizontalRule = () => execCommand("insertHorizontalRule");
+
+  const handleInsertLink = () => {
+    const url = prompt("Enter URL:");
+    if (url) {
+      execCommand("createLink", url);
+    }
+  };
+
+  const handleInsertTable = () => {
+    setShowTableModal(true);
+  };
+
+  const insertTable = () => {
+    let tableHTML =
+      '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; margin: 16px 0;">';
+
+    for (let i = 0; i < tableRows; i++) {
+      tableHTML += "<tr>";
+      for (let j = 0; j < tableCols; j++) {
+        if (i === 0) {
+          tableHTML +=
+            '<th style="background-color: #f3f4f6; padding: 8px; border: 1px solid #d1d5db;">Header</th>';
+        } else {
+          tableHTML +=
+            '<td style="padding: 8px; border: 1px solid #d1d5db;">Cell</td>';
+        }
+      }
+      tableHTML += "</tr>";
+    }
+    tableHTML += "</table>";
+
+    execCommand("insertHTML", tableHTML);
+    setShowTableModal(false);
+    setTableRows(3);
+    setTableCols(3);
+  };
+
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-hidden">
-      <div className="flex min-h-screen bg-gray-50">
-        <Sidebar />
-        <div className="flex-1 flex flex-col">
-          {/* Header */}
-          <header className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="max-w-7xl mx-auto flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <button onClick={() => navigate("/")} className="p-2 hover:bg-gray-100 rounded-full transition">
-                  <ArrowLeft size={20} />
-                </button>
-                <h1 className="text-xl font-semibold">
-                  {documentId ? documentTitle : "Essay Editor"}
+    <main className="bg-gray-50 min-h-screen flex">
+      <Sidebar />
+
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${
+          showAIPanel ? "mr-96" : ""
+        }`}
+      >
+        {/* Top Toolbar */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+          <div className="max-w-6xl mx-auto px-6 py-2">
+            {/* Title and Buttons */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Type className="w-5 h-5 text-gray-600" />
+                <h1 className="text-lg font-semibold text-gray-800">
+                  Polish Document
                 </h1>
+                {currentGoogleDocId && (
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full flex items-center gap-1">
+                    <Cloud size={12} />
+                    Linked to Google Docs
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
-                {!isSignedIn ? (
+                {/* NEW: Google Docs Button */}
+                <button
+                  onClick={() => setShowGoogleDocsModal(true)}
+                  className="bg-white border-2 border-blue-600 text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-all flex items-center gap-2 shadow-sm"
+                >
+                  <CloudUpload size={18} />
+                  Google Docs
+                </button>
+
+                {/* Sync Button (shown when linked) */}
+                {currentGoogleDocId && (
                   <button
-                    onClick={handleSignIn}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                    onClick={syncToGoogleDoc}
+                    disabled={isSyncing}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
                   >
-                    <LogIn size={18} /> Sign in with Google
-                  </button>
-                ) : (
-                  <>
-                    <button
-                      onClick={createNewDoc}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
-                    >
-                      <Plus size={18} /> New Document
-                    </button>
-                    {accessToken && (
-                      <button
-                        onClick={handleOpenByID}
-                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition flex items-center gap-2"
-                      >
-                        <FolderOpen size={18} /> Open by ID
-                      </button>
+                    {isSyncing ? (
+                      <Loader size={18} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={18} />
                     )}
-                    <button
-                      onClick={handleSignOut}
-                      className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition flex items-center gap-2"
-                    >
-                      <LogOut size={18} /> Sign Out
-                    </button>
-                  </>
+                    Sync
+                  </button>
                 )}
+
+                <button
+                  onClick={() => setShowAIPanel(!showAIPanel)}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-blue-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg relative"
+                >
+                  <Sparkles size={18} />
+                  AI Assistance
+                  {corrections.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {corrections.length}
+                    </span>
+                  )}
+                </button>
               </div>
             </div>
-          </header>
 
-          {/* Warning for local users */}
-          {!accessToken && isSignedIn && (
-            <div className="bg-yellow-50 border border-yellow-300 text-yellow-800 px-6 py-3 text-sm text-center">
-              You are using a local account. You can create up to 5 local documents.
-              After logging into Google, you can sync them to Google Docs.
-              <div className="flex justify-center gap-3 mt-3">
-                <button
-                  onClick={handleSignIn}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                >
-                  Sign in with Google
-                </button>
-                <button
-                  onClick={syncLocalToGoogle}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
-                >
-                  Sync to Google Docs
-                </button>
+            {/* Formatting Toolbar */}
+            <div className="flex items-center gap-1 py-2 border-t border-gray-100 flex-wrap">
+              <div className="flex items-center gap-1 pr-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleBold}
+                  icon={<Bold size={18} />}
+                  title="Bold (Ctrl+B)"
+                />
+                <ToolbarButton
+                  onClick={handleItalic}
+                  icon={<Italic size={18} />}
+                  title="Italic (Ctrl+I)"
+                />
+                <ToolbarButton
+                  onClick={handleUnderline}
+                  icon={<UnderlineIcon size={18} />}
+                  title="Underline (Ctrl+U)"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 px-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleH1}
+                  icon={<Heading1 size={18} />}
+                  title="Heading 1"
+                />
+                <ToolbarButton
+                  onClick={handleH2}
+                  icon={<Heading2 size={18} />}
+                  title="Heading 2"
+                />
+                <ToolbarButton
+                  onClick={handleH3}
+                  icon={<Heading3 size={18} />}
+                  title="Heading 3"
+                />
+                <ToolbarButton
+                  onClick={handleParagraph}
+                  icon={<Type size={18} />}
+                  title="Normal Text"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 px-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleAlignLeft}
+                  icon={<AlignLeft size={18} />}
+                  title="Align Left"
+                />
+                <ToolbarButton
+                  onClick={handleAlignCenter}
+                  icon={<AlignCenter size={18} />}
+                  title="Align Center"
+                />
+                <ToolbarButton
+                  onClick={handleAlignRight}
+                  icon={<AlignRight size={18} />}
+                  title="Align Right"
+                />
+                <ToolbarButton
+                  onClick={handleAlignJustify}
+                  icon={<AlignJustify size={18} />}
+                  title="Justify"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 px-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleInsertLink}
+                  icon={<Link size={18} />}
+                  title="Insert Link"
+                />
+                <ToolbarButton
+                  onClick={handleHorizontalRule}
+                  icon={<Minus size={18} />}
+                  title="Horizontal Line"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 pl-3">
+                <ToolbarButton
+                  onClick={handleBlockquote}
+                  icon={<Quote size={18} />}
+                  title="Quote"
+                />
+              </div>
+            </div>
+          </div>
+
+          {selectedText && (
+            <div className="max-w-6xl mx-auto px-6 py-2 border-t border-gray-100 bg-blue-50">
+              <div className="text-sm text-blue-700 flex items-center gap-2">
+                <CheckCheck className="w-4 h-4" />
+                <span className="font-medium">
+                  {selectedText.length} characters selected
+                </span>
+                <span className="text-blue-400">•</span>
+                <span>
+                  Open AI Assistance and go to "Rewrite" tab to rephrase
+                  selection
+                </span>
               </div>
             </div>
           )}
+        </div>
 
-          {/* Main content */}
-          <div className="flex-1 flex max-w-7xl w-full mx-auto">
-            {/* Sidebar with document list */}
-            {isSignedIn && (
-              <div className="w-64 bg-white border-r border-gray-200 p-4 overflow-y-auto">
-                <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                  <FileText size={16} />
-                  {accessToken ? "Google Docs" : "Local Documents"}
-                </h2>
-                {recentDocs.length === 0 ? (
-                  <p className="text-sm text-gray-500">
-                    {accessToken ? "No Google Docs yet" : "No local documents yet"}
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {recentDocs.map((doc) => (
-                      <div
-                        key={doc.id}
-                        className={`p-2 rounded-lg cursor-pointer hover:bg-gray-100 transition group ${
-                          documentId === doc.id ? "bg-purple-50 border border-purple-200" : ""
-                        }`}
-                      >
-                        <div onClick={() => openDocument(doc.id, doc.name)}>
-                          <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {doc.modifiedTime
-                              ? new Date(doc.modifiedTime).toLocaleDateString()
-                              : new Date(doc.createdAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div className="flex gap-1 mt-1 opacity-0 group-hover:opacity-100 transition">
-                          {accessToken && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(`https://docs.google.com/document/d/${doc.id}/edit`, "_blank");
-                              }}
-                              className="p-1 hover:bg-gray-200 rounded"
-                            >
-                              <ExternalLink size={14} />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteDocument(doc.id, doc.name);
-                            }}
-                            className="p-1 hover:bg-red-100 text-red-600 rounded"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+        {error && (
+          <div className="max-w-6xl mx-auto w-full px-6 pt-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          </div>
+        )}
 
-            {/* Main editor area */}
-            <div className="flex-1 p-6">
-              {!documentId ? (
-                <div className="h-full flex items-center justify-center bg-white rounded-lg shadow-sm border border-gray-200">
-                  <div className="text-center">
-                    <FileText size={64} className="mx-auto text-gray-300 mb-4" />
-                    <h2 className="text-2xl font-semibold text-gray-700 mb-2">
-                      No Document Open
-                    </h2>
-                    <p className="text-gray-500 mb-6">
-                      Create a new document or open one from the sidebar
-                    </p>
-                  </div>
-                </div>
-              ) : accessToken ? (
-                <iframe
-                  src={`https://docs.google.com/document/d/${documentId}/edit?embedded=true`}
-                  width="100%"
-                  height="100%"
-                  frameBorder="0"
-                  className="w-full h-full rounded-lg"
-                  title="Google Docs"
-                />
-              ) : (
-                <textarea
-                  className="w-full h-full p-6 text-gray-800 text-base outline-none resize-none"
-                  placeholder="Start writing your document here..."
-                  defaultValue={localStorage.getItem(documentId) || ""}
-                  onChange={(e) => localStorage.setItem(documentId, e.target.value)}
-                />
-              )}
+        {/* Writing Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="bg-white rounded-lg shadow-lg min-h-[800px] p-16">
+              <div
+                ref={editorRef}
+                contentEditable
+                onInput={handleInput}
+                onClick={(e) => {
+                  const target = e.target;
+                  if (target.classList.contains("grammar-error")) {
+                    const correctionId =
+                      target.getAttribute("data-correction-id");
+                    const correction = corrections.find(
+                      (c) => c.id === correctionId
+                    );
+                    if (correction) {
+                      setShowAIPanel(true);
+                      setActiveTab("grammar");
+                      setTimeout(() => {
+                        const correctionElement = document.querySelector(
+                          `[data-correction-card="${correctionId}"]`
+                        );
+                        if (correctionElement) {
+                          correctionElement.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                          correctionElement.classList.add(
+                            "highlight-correction"
+                          );
+                          setTimeout(() => {
+                            correctionElement.classList.remove(
+                              "highlight-correction"
+                            );
+                          }, 2000);
+                        }
+                      }, 100);
+                    }
+                  }
+                }}
+                className="min-h-[700px] focus:outline-none text-gray-800 leading-relaxed"
+                style={{
+                  fontSize: "16px",
+                  lineHeight: "1.8",
+                  fontFamily:
+                    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                }}
+                data-placeholder="Start writing your document..."
+                suppressContentEditableWarning
+              />
+            </div>
+
+            <div className="mt-4 text-center text-sm text-gray-500">
+              {inputText.length} characters •{" "}
+              {inputText.split(/\s+/).filter((w) => w.length > 0).length} words
             </div>
           </div>
         </div>
       </div>
 
-      {/* Delete confirmation modal */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              Delete Document?
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Are you sure you want to delete "
-              <strong>{deleteConfirm.docName}</strong>"? This action cannot be undone.
-            </p>
-            <div className="flex gap-3 justify-end">
+      {/* AI Assistance Slide-in Panel (Keep existing panel code...) */}
+      <div
+        className={`fixed right-0 top-0 h-full w-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
+          showAIPanel ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        {/* Panel Header */}
+        <div className="bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 p-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-6 h-6 text-purple-600" />
+            <h2 className="text-xl font-bold">AI Assistance</h2>
+          </div>
+          <button
+            onClick={() => setShowAIPanel(false)}
+            className="hover:bg-white/30 p-2 rounded-lg transition-all"
+          >
+            <X className="w-6 h-6 text-purple-700" />
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="bg-white border-b border-gray-200 flex">
+          <button
+            onClick={() => setActiveTab("grammar")}
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "grammar"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <FileCheck size={16} />
+            Grammar
+            {corrections.length > 0 && activeTab !== "grammar" && (
+              <span className="bg-orange-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {corrections.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("rewrite")}
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "rewrite"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Wand2 size={16} />
+            Rewrite
+          </button>
+          <button
+            onClick={() => setActiveTab("plagiarism")}
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "plagiarism"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Search size={16} />
+            Originality
+          </button>
+        </div>
+
+        {/* Panel Content */}
+        <div className="h-full overflow-y-auto pb-32">
+          {/* Grammar Tab */}
+          {activeTab === "grammar" && (
+            <>
+              {corrections.length > 0 ? (
+                <div className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <AlertCircle className="w-5 h-5 text-orange-500" />
+                    <h3 className="font-bold text-gray-800 text-lg">
+                      Grammar Issues ({corrections.length})
+                    </h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    {corrections.map((correction, index) => (
+                      <div
+                        key={correction.id}
+                        data-correction-card={correction.id}
+                        className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all"
+                      >
+                        <div className="text-xs text-gray-500 font-semibold mb-2">
+                          Issue {index + 1}
+                        </div>
+
+                        <div className="mb-3">
+                          <div className="text-xs text-gray-600 mb-1">
+                            Original:
+                          </div>
+                          <div className="text-sm text-red-600 line-through bg-red-50 p-2 rounded">
+                            {correction.original}
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs text-gray-600 mb-1">
+                            Suggestion:
+                          </div>
+                          <div className="text-sm text-green-700 font-semibold bg-green-50 p-2 rounded">
+                            {correction.correction}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              const plainText = editorRef.current.textContent;
+                              const newText =
+                                plainText.substring(0, correction.startIndex) +
+                                correction.correction +
+                                plainText.substring(correction.endIndex);
+
+                              editorRef.current.textContent = newText;
+                              setInputText(newText);
+                              setCorrections((prev) =>
+                                prev.filter((c) => c.id !== correction.id)
+                              );
+                            }}
+                            className="flex-1 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                          >
+                            <CheckCheck size={16} />
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCorrections((prev) =>
+                                prev.filter((c) => c.id !== correction.id)
+                              );
+                            }}
+                            className="flex-1 bg-gray-300 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-400 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                          >
+                            <X size={16} />
+                            Ignore
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6">
+                  <div className="text-center py-12">
+                    <CheckCheck className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                      No Issues Found
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      Your document looks great! No grammar issues detected.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Rewrite Tab */}
+          {activeTab === "rewrite" && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Wand2 className="w-5 h-5 text-purple-500" />
+                <h3 className="font-bold text-gray-800 text-lg">
+                  Rewrite Text
+                </h3>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Text to Rewrite
+                </label>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-40 overflow-y-auto">
+                  {selectedText || inputText ? (
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">
+                      {selectedText || inputText}
+                    </p>
+                  ) : (
+                    <p className="text-gray-400 text-sm italic">
+                      Write or select text in the editor to rewrite it
+                    </p>
+                  )}
+                </div>
+                {selectedText && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    ✓ Selection will be rewritten
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-6 space-y-4">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    Tone
+                  </label>
+                  <select
+                    value={tone}
+                    onChange={(e) => setTone(e.target.value)}
+                    disabled={isRephrasing}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-800 shadow-md focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 hover:border-indigo-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer"
+                  >
+                    <option value="as-is">As Is</option>
+                    <option value="more-formal">More Formal</option>
+                    <option value="more-casual">More Casual</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    Length
+                  </label>
+                  <select
+                    value={length}
+                    onChange={(e) => setLength(e.target.value)}
+                    disabled={isRephrasing}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-800 shadow-md focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 hover:border-indigo-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer"
+                  >
+                    <option value="as-is">As Is</option>
+                    <option value="shorter">Shorter</option>
+                    <option value="longer">Longer</option>
+                  </select>
+                </div>
+              </div>
+
               <button
-                onClick={() => setDeleteConfirm(null)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                onClick={handleRephrase}
+                disabled={isRephrasing || (!selectedText && !inputText.trim())}
+                className="w-full bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 px-6 py-3 rounded-xl font-semibold shadow-sm hover:from-purple-200 hover:to-pink-200 focus:ring-2 focus:ring-purple-300 focus:outline-none transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
               >
-                Cancel
+                {isRephrasing ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Rewriting...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 size={20} />
+                    Generate Rewrite
+                  </>
+                )}
               </button>
+
+              {isRephrasing && !rephrasedResult && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-blue-700 text-xs">
+                    🔄 Initializing AI rewriter... This may take a moment on
+                    first use.
+                  </p>
+                </div>
+              )}
+
+              {rephrasedResult && (
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    Rewritten Result
+                  </label>
+                  <div className="p-4 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg border-2 border-green-200 min-h-32 mb-4">
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">
+                      {rephrasedResult}
+                    </p>
+                  </div>
+
+                  {!rephrasedResult.includes("⚠️") && (
+                    <button
+                      onClick={handleUseRephrasedText}
+                      className="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+                    >
+                      <CheckCheck size={20} />
+                      {selectedText ? "Replace Selection" : "Replace Document"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Originality/Plagiarism Tab */}
+          {activeTab === "plagiarism" && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Search className="w-5 h-5 text-blue-500" />
+                <h3 className="font-bold text-gray-800 text-lg">
+                  Originality Check
+                </h3>
+              </div>
+
+              {!plagiarismResult ? (
+                <>
+                  <div className="w-full bg-white/60 backdrop-blur-md border border-gray-200 rounded-xl px-6 py-4 shadow-sm hover:bg-white/70 transition-all duration-300 mb-6">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-purple-500" />
+                      What we check
+                    </h4>
+
+                    <ul className="text-sm text-gray-500 space-y-1 pl-1">
+                      <li>Content accuracy</li>
+                      <li>Grammar and tone</li>
+                      <li>Readability and clarity</li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={handlePlagiarismCheck}
+                    disabled={isCheckingPlagiarism || !inputText.trim()}
+                    className="w-full bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 px-6 py-3 rounded-xl font-semibold shadow-sm hover:from-purple-200 hover:to-pink-200 focus:ring-2 focus:ring-purple-300 focus:outline-none transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+                  >
+                    {isCheckingPlagiarism ? (
+                      <>
+                        <Loader className="w-5 h-5 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Search size={20} />
+                        Check Originality
+                      </>
+                    )}
+                  </button>
+
+                  {isCheckingPlagiarism && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-blue-700 text-xs">
+                        🔄 This may take 30-60 seconds for first-time model
+                        loading...
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div
+                      className={`p-4 rounded-xl border-2 ${
+                        plagiarismResult.overall_risk === "high"
+                          ? "bg-red-50 border-red-300"
+                          : plagiarismResult.overall_risk === "medium"
+                          ? "bg-yellow-50 border-yellow-300"
+                          : "bg-green-50 border-green-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        {plagiarismResult.overall_risk === "high" ? (
+                          <AlertTriangle className="w-5 h-5 text-red-600" />
+                        ) : plagiarismResult.overall_risk === "medium" ? (
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                        ) : (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        )}
+                        <h4
+                          className={`font-bold ${
+                            plagiarismResult.overall_risk === "high"
+                              ? "text-red-800"
+                              : plagiarismResult.overall_risk === "medium"
+                              ? "text-yellow-800"
+                              : "text-green-800"
+                          }`}
+                        >
+                          Overall Risk:{" "}
+                          {plagiarismResult.overall_risk.toUpperCase()}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="w-5 h-5 text-purple-600" />
+                        <h4 className="font-bold text-gray-800">
+                          AI Content Detection
+                        </h4>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">AI Probability:</span>
+                          <span className="font-semibold text-gray-800">
+                            {plagiarismResult.ai_probability}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Confidence:</span>
+                          <span className="font-semibold text-gray-800">
+                            {plagiarismResult.ai_confidence}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">AI Generated:</span>
+                          <span
+                            className={`font-semibold ${
+                              plagiarismResult.is_ai_generated
+                                ? "text-red-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {plagiarismResult.is_ai_generated ? "Yes" : "No"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Shield className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-bold text-gray-800">
+                          Plagiarism Detection
+                        </h4>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Plagiarism:</span>
+                          <span className="font-semibold text-gray-800">
+                            {plagiarismResult.plagiarism_percent}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Unique:</span>
+                          <span className="font-semibold text-green-600">
+                            {plagiarismResult.unique_percent}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Risk Level:</span>
+                          <span
+                            className={`font-semibold ${
+                              plagiarismResult.plagiarism_risk === "high"
+                                ? "text-red-600"
+                                : plagiarismResult.plagiarism_risk === "medium"
+                                ? "text-yellow-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {plagiarismResult.plagiarism_risk.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {plagiarismResult.recommendations &&
+                      plagiarismResult.recommendations.length > 0 && (
+                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                          <h4 className="font-bold text-blue-900 mb-2">
+                            Recommendations
+                          </h4>
+                          <ul className="text-sm text-blue-700 space-y-1">
+                            {plagiarismResult.recommendations.map(
+                              (rec, idx) => (
+                                <li key={idx}>• {rec}</li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPlagiarismResult(null)}
+                        className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={16} />
+                        Check Again
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* NEW: Google Docs Modal */}
+      {showGoogleDocsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-purple-50 via-purple-100 to-pink-50
+             text-gray-700 p-6 flex items-center justify-between 
+             rounded-xl shadow-sm hover:from-purple-100 hover:via-purple-200 hover:to-pink-100
+             transition-all duration-300"
+            >
+              <div className="flex items-center gap-3">
+                <CloudUpload className="w-6 h-6" />
+                <h2 className="text-xl font-bold">Google Docs Integration</h2>
+              </div>
               <button
-                onClick={confirmDelete}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                onClick={() => setShowGoogleDocsModal(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition-all"
               >
-                Delete
+                <X className="w-5 h-5" />
               </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
+              {!isGoogleSignedIn ? (
+                <div className="text-center py-8">
+                  <Cloud className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                    Sign in to Google
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Connect your Google account to upload, sync, and manage your
+                    documents in Google Docs
+                  </p>
+                  <button
+                    onClick={handleGoogleSignIn}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 mx-auto"
+                  >
+                    <LogIn size={18} />
+                    Sign in with Google
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-1 gap-4 mb-6">
+                    <button
+                      onClick={uploadToGoogleDocs}
+                      disabled={isUploading || !inputText.trim()}
+                      className="
+    w-full 
+    bg-gradient-to-r from-purple-200 via-purple-300 to-pink-200
+    text-gray-800
+    px-6 py-4 
+    rounded-xl 
+    font-semibold 
+    shadow-md 
+    hover:from-purple-300 hover:via-purple-400 hover:to-pink-300
+    transition-all duration-300 
+    flex items-center justify-center gap-3 
+    disabled:opacity-50 disabled:cursor-not-allowed
+  "
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader className="w-5 h-5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={20} />
+                          Upload to Google Docs
+                        </>
+                      )}
+                    </button>
+
+                    {currentGoogleDocId && (
+                      <button
+                        onClick={syncToGoogleDoc}
+                        disabled={isSyncing}
+                        className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-4 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      >
+                        {isSyncing ? (
+                          <>
+                            <Loader className="w-5 h-5 animate-spin" />
+                            Syncing...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw size={20} />
+                            Sync Current Document
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Recent Google Docs */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <FolderOpen size={16} />
+                      Your Google Docs
+                    </h3>
+
+                    {googleDocs.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500 text-sm">
+                          No Google Docs found. Upload your first document!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {googleDocs.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className={`p-4 rounded-lg border transition-all hover:border-blue-300 cursor-pointer ${
+                              currentGoogleDocId === doc.id
+                                ? "bg-blue-50 border-blue-300"
+                                : "bg-gray-50 border-gray-200"
+                            }`}
+                            onClick={() => loadFromGoogleDoc(doc.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {doc.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Modified:{" "}
+                                  {new Date(
+                                    doc.modifiedTime
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(doc.webViewLink, "_blank");
+                                }}
+                                className="p-2 hover:bg-blue-100 rounded-lg transition"
+                              >
+                                <FolderOpen
+                                  size={16}
+                                  className="text-blue-600"
+                                />
+                              </button>
+                            </div>
+                            {currentGoogleDocId === doc.id && (
+                              <div className="mt-2 text-xs text-blue-600 flex items-center gap-1">
+                                <CheckCircle size={12} />
+                                Currently linked
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Styles */}
+      <style>{`
+        [contenteditable] h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
+        [contenteditable] h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
+        [contenteditable] h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }
+        [contenteditable] blockquote { border-left: 4px solid #e5e7eb; padding-left: 16px; margin: 16px 0; color: #6b7280; font-style: italic; }
+        [contenteditable] ul, [contenteditable] ol { padding-left: 40px; margin: 16px 0; }
+        [contenteditable] li { margin: 8px 0; }
+        [contenteditable] a { color: #2563eb; text-decoration: underline; }
+        [contenteditable] hr { border: none; border-top: 2px solid #e5e7eb; margin: 24px 0; }
+        [contenteditable] table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+        [contenteditable] table th { background-color: #f3f4f6; font-weight: 600; text-align: left; }
+        [contenteditable] table th, [contenteditable] table td { border: 1px solid #d1d5db; padding: 8px 12px; }
+        [contenteditable][data-placeholder]:empty:before { content: attr(data-placeholder); color: #9ca3af; cursor: text; }
+        [contenteditable] { -webkit-user-select: text; user-select: text; }
+
+        .grammar-error {
+          text-decoration: underline wavy red;
+          text-decoration-thickness: 2px;
+          cursor: pointer;
+          background-color: transparent;
+          border-radius: 3px;
+          padding: 0 2px;
+        }
+        .grammar-error:hover { background-color: rgba(239, 68, 68, 0.1); }
+        .highlight-correction { animation: highlight-pulse 2s ease-in-out; }
+        @keyframes highlight-pulse {
+          0%, 100% { background-color: transparent; }
+          50% { background-color: rgba(59, 130, 246, 0.2); }
+        }
+      `}</style>
+
+      {/* Table Modal */}
+      {showTableModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Table className="w-6 h-6" />
+                <h2 className="text-xl font-bold">Insert Table</h2>
+              </div>
+              <button
+                onClick={() => setShowTableModal(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Number of Rows
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={tableRows}
+                  onChange={(e) => setTableRows(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Number of Columns
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={tableCols}
+                  onChange={(e) => setTableCols(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={insertTable}
+                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all"
+                >
+                  Insert Table
+                </button>
+                <button
+                  onClick={() => setShowTableModal(false)}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -487,4 +1957,15 @@ function EssayEditor() {
   );
 }
 
-export default EssayEditor;
+// Toolbar Button Component
+function ToolbarButton({ onClick, icon, title }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
+    >
+      {icon}
+    </button>
+  );
+}

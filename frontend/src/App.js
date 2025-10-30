@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import Homepage from "./pages/Homepage";
+import Home from "./pages/Home";
 import EssayEditor from "./pages/EssayEditor";
 import CollectionsPage from "./pages/CollectionsPage";
 import ExplorePage from "./pages/ExplorePage";
@@ -18,34 +18,37 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/*Routes that should NOT show the Sidebar */}
+        {/* No Sidebar Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/welcome" element={<Welcome />} />
-
-        {/* Routes that SHOULD include the Sidebar */}
+        <Route path="/" element={<Home />} /> {/* 👈 Home without Sidebar */}
+        {/* Routes WITH Sidebar */}
         <Route
           path="/*"
           element={
-            <>
+            <div className="flex">
               <Sidebar />
-
-              <div className="ml-20">
+              <div className="flex-1 ml-20">
                 <Routes>
-                  <Route path="/" element={<Homepage />} />
+                  <Route path="/explore" element={<ExplorePage />} />
                   <Route path="/essay/:id" element={<EssayEditor />} />
                   <Route path="/collections" element={<CollectionsPage />} />
-                  <Route path="/explore" element={<ExplorePage />} />
                   <Route path="/aitool" element={<AIToolPage />} />
-                  <Route path="/plagiarism-result" element={<PlagiarismResultPage />} />
+                  <Route
+                    path="/plagiarism-result"
+                    element={<PlagiarismResultPage />}
+                  />
                   <Route path="/recent" element={<RecentPage />} />
                   <Route path="/history" element={<History />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/summarize-result" element={<SummarizeResultPage />} />
+                  <Route
+                    path="/summarize-result"
+                    element={<SummarizeResultPage />}
+                  />
                   <Route path="/polish" element={<PolishPage />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>
               </div>
-            </>
+            </div>
           }
         />
       </Routes>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom"; 
+import { useNavigate, useLocation } from "react-router-dom";
 import {
   Edit,
   Archive,
@@ -12,7 +12,7 @@ import {
 
 function Sidebar() {
   const navigate = useNavigate();
-  const location = useLocation(); 
+  const location = useLocation();
 
   const [user, setUser] = useState(null);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -42,7 +42,8 @@ function Sidebar() {
     };
 
     window.addEventListener("profile-updated", handleProfileUpdate);
-    return () => window.removeEventListener("profile-updated", handleProfileUpdate);
+    return () =>
+      window.removeEventListener("profile-updated", handleProfileUpdate);
   }, []);
 
   const handleLogout = () => {
@@ -68,8 +69,8 @@ function Sidebar() {
   const navigationItems = [
     { icon: Sparkles, label: "TextLab", path: "/aitool" },
     { icon: Archive, label: "Collections", path: "/collections" },
-    { icon: Globe, label: "Explore", path: "/explore" },
-    { icon: Origami, label: "Polish", path: "/polish" },
+    // { icon: Globe, label: "Explore", path: "/explore" },
+    // { icon: Origami, label: "Polish", path: "/polish" },
   ];
 
   const UserAvatar = ({ size = "w-8 h-8" }) => {
@@ -98,7 +99,6 @@ function Sidebar() {
       </div>
     );
   };
-
 
   return (
     <nav className="fixed left-0 top-0 h-screen flex flex-col items-center w-20 pt-11 pb-6 bg-gradient-to-b from-purple-100 to-pink-100">
@@ -134,7 +134,7 @@ function Sidebar() {
       {/* Navigation */}
       <div className="flex flex-col items-center gap-4 w-full mt-8">
         {navigationItems.map((item, index) => {
-          const isActive = location.pathname.startsWith(item.path); 
+          const isActive = location.pathname.startsWith(item.path);
           return (
             <button
               key={index}
@@ -185,8 +185,12 @@ function Sidebar() {
                 <div className="flex items-center gap-2 mb-3 pb-3 border-b">
                   <UserAvatar size="w-10 h-10" />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{user.username}</p>
-                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                    <p className="font-semibold text-sm truncate">
+                      {user.username}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {user.email}
+                    </p>
                   </div>
                 </div>
 

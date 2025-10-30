@@ -1,763 +1,1971 @@
 // pages/PolishPage.jsx
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
-  Wand2,
-  FileText,
-  Sparkles,
-  Target,
-  Zap,
+  RefreshCw,
   Loader,
   AlertCircle,
-  CheckCircle,
-  Copy,
-  Download,
-  RefreshCw,
+  CheckCheck,
+  X,
+  Wand2,
   Type,
+  Bold,
+  Italic,
+  Underline as UnderlineIcon,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  List,
+  ListOrdered,
+  Table,
+  Heading1,
+  Heading2,
+  Heading3,
+  Link,
+  Minus,
+  Quote,
+  Sparkles,
+  FileCheck,
+  Search,
+  Shield,
+  TrendingUp,
+  AlertTriangle,
+  CheckCircle,
+  Download,
+  Upload,
+  Cloud,
+  CloudUpload,
+  Save,
+  FolderOpen,
+  LogIn,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
+import { checkAIOnly } from "../api";
+import { getStoredUser } from "../api/auth";
 
 export default function PolishPage() {
-  const [isToneOpen, setIsToneOpen] = useState(false);
-  const [isLengthOpen, setIsLengthOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("grammar");
   const [inputText, setInputText] = useState("");
-  const [polishedText, setPolishedText] = useState("");
-  const [isHTML, setIsHTML] = useState(false);
-  const [correctionCount, setCorrectionCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [selectedText, setSelectedText] = useState("");
+  const [selectionRange, setSelectionRange] = useState(null);
   const [error, setError] = useState(null);
-  const [copySuccess, setCopySuccess] = useState(false);
+
+  // AI Panel state
+  const [showAIPanel, setShowAIPanel] = useState(false);
+  const [activeTab, setActiveTab] = useState("grammar");
+
+  // Rephrase state
   const [tone, setTone] = useState("as-is");
   const [length, setLength] = useState("as-is");
-  const [apiStatus, setApiStatus] = useState({
-    proofreader: false,
-    rewriter: false,
-  });
+  const [isRephrasing, setIsRephrasing] = useState(false);
+  const [rephrasedResult, setRephrasedResult] = useState("");
 
-  // Check Chrome APIs availability on mount
+  // Plagiarism check state
+  const [isCheckingPlagiarism, setIsCheckingPlagiarism] = useState(false);
+  const [plagiarismResult, setPlagiarismResult] = useState(null);
+
+  // Table modal state
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableCols, setTableCols] = useState(3);
+
+  // Dynamic checking state
+  const [isChecking, setIsChecking] = useState(false);
+  const checkTimeoutRef = useRef(null);
+
+  // Interactive corrections state
+  const [corrections, setCorrections] = useState([]);
+  const editorRef = useRef(null);
+  const isUpdatingRef = useRef(false);
+
+  // NEW: Google Docs integration state
+  const [showGoogleDocsModal, setShowGoogleDocsModal] = useState(false);
+  const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
+  const [accessToken, setAccessToken] = useState(null);
+  const [gapiReady, setGapiReady] = useState(false);
+  const [googleDocs, setGoogleDocs] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [currentGoogleDocId, setCurrentGoogleDocId] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Initialize Google API client
   useEffect(() => {
-    const checkAPIs = async () => {
-      console.log("=== Chrome AI APIs Diagnostics ===");
+    const initGapi = async () => {
+      console.log("[Google Docs] Starting GAPI initialization...");
 
-      // Check Proofreader API
-      if ("Proofreader" in window && window.Proofreader) {
-        try {
-          const availability = await window.Proofreader.availability();
-          if (availability === "readily" || availability === "downloadable") {
-            console.log("Proofreader API is AVAILABLE!");
-            setApiStatus((prev) => ({ ...prev, proofreader: true }));
-          }
-        } catch (err) {
-          console.error("Proofreader API check error:", err);
+      try {
+        // Check if gapi.client is already initialized
+        if (window.gapi?.client?.docs && window.gapi?.client?.drive) {
+          console.log(
+            "[Google Docs] ✓ GAPI already initialized from another component!"
+          );
+          setGapiReady(true);
+          setError(null);
+          return;
         }
-      }
 
-      // Check Rewriter API - using the correct API name
-      if ("Rewriter" in window && window.Rewriter) {
-        try {
-          const availability = await window.Rewriter.availability();
-          console.log("Rewriter availability:", availability);
-          if (availability === "readily" || availability === "after-download") {
-            console.log("Rewriter API is AVAILABLE!");
-            setApiStatus((prev) => ({ ...prev, rewriter: true }));
-          }
-        } catch (err) {
-          console.error("Rewriter API check error:", err);
+        // Load client library
+        await new Promise((resolve, reject) => {
+          window.gapi.load("client", {
+            callback: resolve,
+            onerror: reject,
+          });
+        });
+
+        console.log("[Google Docs] Client library loaded");
+
+        // Initialize WITHOUT API key (we're using OAuth tokens)
+        console.log("[Google Docs] Initializing GAPI client for OAuth...");
+        await window.gapi.client.init({
+          // No apiKey needed - we'll use the OAuth access token
+        });
+        console.log("[Google Docs] GAPI client initialized for OAuth");
+
+        // Load APIs
+        if (!window.gapi.client.docs) {
+          console.log("[Google Docs] Loading Docs API...");
+          await window.gapi.client.load(
+            "https://docs.googleapis.com/$discovery/rest?version=v1"
+          );
+          console.log("[Google Docs] Docs API loaded");
         }
-      }
 
-      console.log("API Status check complete");
+        if (!window.gapi.client.drive) {
+          console.log("[Google Docs] Loading Drive API...");
+          await window.gapi.client.load(
+            "https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"
+          );
+          console.log("[Google Docs] Drive API loaded");
+        }
+
+        // Final verification
+        const docsLoaded = !!window.gapi.client.docs;
+        const driveLoaded = !!window.gapi.client.drive;
+
+        console.log(
+          "[Google Docs] Final check - Docs API:",
+          docsLoaded,
+          "Drive API:",
+          driveLoaded
+        );
+
+        if (docsLoaded && driveLoaded) {
+          console.log("[Google Docs] ✓ All APIs ready!");
+          setGapiReady(true);
+          setError(null);
+        } else {
+          console.error("[Google Docs] APIs not properly loaded");
+          setError("Some Google APIs failed to load. Please refresh the page.");
+        }
+      } catch (error) {
+        console.error("[Google Docs] GAPI init error:", error);
+        console.error("[Google Docs] Error details:", {
+          message: error.message,
+          stack: error.stack,
+        });
+
+        setError(
+          `API initialization failed: ${error.message}. Check browser console for details.`
+        );
+      }
     };
 
-    checkAPIs();
+    // Check if gapi script already exists and is loaded
+    const existingScript = document.querySelector(
+      'script[src="https://apis.google.com/js/api.js"]'
+    );
+
+    if (existingScript && window.gapi) {
+      console.log("[Google Docs] GAPI script already loaded, initializing...");
+      initGapi();
+      return;
+    }
+
+    if (existingScript && !window.gapi) {
+      console.log(
+        "[Google Docs] GAPI script exists but not loaded yet, waiting..."
+      );
+      existingScript.onload = initGapi;
+      return;
+    }
+
+    // Load the gapi script
+    console.log("[Google Docs] Loading GAPI script...");
+    const gapiScript = document.createElement("script");
+    gapiScript.src = "https://apis.google.com/js/api.js";
+    gapiScript.async = true;
+    gapiScript.defer = true;
+    gapiScript.onload = () => {
+      console.log("[Google Docs] GAPI script loaded successfully");
+      initGapi();
+    };
+    gapiScript.onerror = (e) => {
+      console.error("[Google Docs] Failed to load GAPI script:", e);
+      setError(
+        "Failed to load Google API script. Please check your internet connection and refresh."
+      );
+    };
+
+    document.body.appendChild(gapiScript);
+
+    return () => {
+      // Don't remove the script on unmount
+    };
   }, []);
 
+  // Check for Google user
   useEffect(() => {
-    setPolishedText("");
-    setIsHTML(false);
-    setCorrectionCount(0);
-    setError(null);
-  }, [activeTab]);
+    const user = getStoredUser();
+    if (user?.google_access_token) {
+      setAccessToken(user.google_access_token);
+      setIsGoogleSignedIn(true);
+    }
+  }, []);
 
-  const polishWithFallback = (text) => {
-    console.log("[Polish] Using fallback algorithm...");
+  // Load Google Docs when signed in
+  useEffect(() => {
+    if (accessToken && gapiReady && window.gapi?.client) {
+      console.log("[Google Docs] Setting up token and loading docs...");
+      window.gapi.client.setToken({ access_token: accessToken });
+      loadGoogleDocs();
+    }
+  }, [accessToken, gapiReady]);
+
+  // Load Google Docs list
+  const loadGoogleDocs = async () => {
+    if (!gapiReady || !window.gapi?.client?.drive) {
+      console.log("[Google Docs] GAPI not ready yet");
+      return;
+    }
+
+    if (!accessToken) {
+      console.log("[Google Docs] No access token available");
+      return;
+    }
 
     try {
-      let result = text
-        .replace(/\s+/g, " ")
-        .replace(/\s+([.,!?;:])/g, "$1")
-        .replace(/([.,!?;:])([a-zA-Z])/g, "$1 $2")
-        .replace(
-          /([.!?])\s+([a-z])/g,
-          (match, p1, p2) => `${p1} ${p2.toUpperCase()}`
-        )
-        .replace(/\bi\b/g, "I")
-        .replace(/^([a-z])/, (match) => match.toUpperCase())
-        .trim();
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
 
-      return {
-        result:
-          result +
-          "\n\n---\n⚠️ Note: Chrome Proofreader API is not available. This was processed using a basic algorithm.",
-        method: "fallback-algorithm",
-      };
-    } catch (err) {
-      console.error("[Polish] Fallback error:", err);
-      return {
-        result: text + "\n\n---\n⚠️ Error: Could not process text.",
-        method: "error",
-      };
+      console.log("[Google Docs] Loading documents...");
+      const response = await window.gapi.client.drive.files.list({
+        pageSize: 10,
+        fields: "files(id, name, modifiedTime, webViewLink)",
+        q: "mimeType='application/vnd.google-apps.document' and trashed=false",
+        orderBy: "modifiedTime desc",
+      });
+      setGoogleDocs(response.result.files || []);
+      setError(null);
+      console.log(
+        "[Google Docs] Loaded",
+        response.result.files?.length || 0,
+        "documents"
+      );
+    } catch (error) {
+      console.error("[Google Docs] Error loading docs:", error);
+      if (error.status === 401) {
+        setError("Your Google session has expired. Please sign in again.");
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else {
+        setError("Failed to load Google Docs. Please try again.");
+      }
     }
   };
 
-  const polishWithProofreader = async (text) => {
-    console.log("[Polish] Attempting to use Chrome Proofreader API...");
+  // Handle Google Sign-in
+  const handleGoogleSignIn = async () => {
+    try {
+      localStorage.setItem("redirect_after_login", window.location.pathname);
+      const response = await fetch(
+        "http://localhost:8000/api/auth/google/login"
+      );
+      const data = await response.json();
+      if (data.auth_url) {
+        window.location.href = data.auth_url;
+      }
+    } catch (error) {
+      console.error("[Google Docs] Login error:", error);
+      setError("Failed to start Google login");
+    }
+  };
+
+  // Upload current document to Google Docs
+  const uploadToGoogleDocs = async () => {
+    if (!isGoogleSignedIn) {
+      setError("Please sign in with Google first");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    if (!inputText.trim()) {
+      setError("Please write some content before uploading");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // Check if GAPI is ready
+    if (!gapiReady || !window.gapi?.client?.docs) {
+      setError("Google API not ready. Please wait a moment and try again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // Check if token is set
+    if (!accessToken) {
+      setError("Google authentication token not found. Please sign in again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    const title = prompt("Enter document title:", "Polished Document");
+    if (!title) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      console.log("[Upload] Starting upload process...");
+
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
+
+      // Get plain text content
+      const plainText = editorRef.current
+        ? editorRef.current.textContent
+        : inputText;
+
+      console.log("[Upload] Creating document with title:", title);
+
+      // Create new Google Doc
+      const createResponse = await window.gapi.client.docs.documents.create({
+        title: title,
+      });
+
+      if (!createResponse?.result?.documentId) {
+        throw new Error("Failed to create document - no document ID returned");
+      }
+
+      const docId = createResponse.result.documentId;
+      console.log("[Upload] Document created with ID:", docId);
+
+      // Insert content into the document
+      console.log("[Upload] Inserting content...");
+      await window.gapi.client.docs.documents.batchUpdate({
+        documentId: docId,
+        requests: [
+          {
+            insertText: {
+              location: { index: 1 },
+              text: plainText,
+            },
+          },
+        ],
+      });
+
+      console.log("[Upload] Content inserted successfully");
+      setCurrentGoogleDocId(docId);
+      await loadGoogleDocs();
+
+      setIsUploading(false);
+      setShowGoogleDocsModal(false);
+
+      alert(`Document "${title}" uploaded successfully to Google Docs!`);
+
+      // Ask if user wants to open it
+      const openNow = window.confirm(
+        "Would you like to open the document in Google Docs?"
+      );
+      if (openNow) {
+        window.open(
+          `https://docs.google.com/document/d/${docId}/edit`,
+          "_blank"
+        );
+      }
+    } catch (error) {
+      console.error("[Upload Error]:", error);
+      console.error("[Upload Error Details]:", {
+        status: error.status,
+        statusText: error.statusText,
+        message: error.message,
+        result: error.result,
+      });
+
+      let errorMessage = "Failed to upload to Google Docs";
+
+      if (error.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else if (error.status === 403) {
+        errorMessage =
+          "Permission denied. Please check your Google account permissions.";
+      } else if (error.status === 404) {
+        errorMessage = "Google Docs API not found. Please check your setup.";
+      } else if (error.message) {
+        errorMessage = `Upload failed: ${error.message}`;
+      }
+
+      setError(errorMessage);
+      setIsUploading(false);
+
+      // Keep error visible longer
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // Sync changes to existing Google Doc
+  const syncToGoogleDoc = async () => {
+    if (!currentGoogleDocId) {
+      setError("No Google Doc linked. Please upload first.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    if (!gapiReady || !window.gapi?.client?.docs) {
+      setError("Google API not ready. Please wait a moment and try again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setIsSyncing(true);
+    setError(null);
+
+    try {
+      console.log("[Sync] Starting sync to document:", currentGoogleDocId);
+
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
+
+      // Get the current content from the Google Doc
+      const docResponse = await window.gapi.client.docs.documents.get({
+        documentId: currentGoogleDocId,
+      });
+
+      console.log("[Sync] Retrieved document structure");
+
+      // Clear existing content and insert new content
+      const plainText = editorRef.current
+        ? editorRef.current.textContent
+        : inputText;
+
+      const endIndex =
+        docResponse.result.body.content[
+          docResponse.result.body.content.length - 1
+        ].endIndex - 1;
+
+      console.log("[Sync] Updating content...");
+
+      await window.gapi.client.docs.documents.batchUpdate({
+        documentId: currentGoogleDocId,
+        requests: [
+          {
+            deleteContentRange: {
+              range: {
+                startIndex: 1,
+                endIndex: endIndex,
+              },
+            },
+          },
+          {
+            insertText: {
+              location: { index: 1 },
+              text: plainText,
+            },
+          },
+        ],
+      });
+
+      console.log("[Sync] Content updated successfully");
+      alert("Document synced successfully!");
+      setIsSyncing(false);
+    } catch (error) {
+      console.error("[Sync Error]:", error);
+      console.error("[Sync Error Details]:", {
+        status: error.status,
+        statusText: error.statusText,
+        message: error.message,
+      });
+
+      let errorMessage = "Failed to sync with Google Docs";
+
+      if (error.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else if (error.status === 404) {
+        errorMessage = "Document not found. It may have been deleted.";
+        setCurrentGoogleDocId(null);
+      } else if (error.message) {
+        errorMessage = `Sync failed: ${error.message}`;
+      }
+
+      setError(errorMessage);
+      setIsSyncing(false);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // Load content from selected Google Doc
+  const loadFromGoogleDoc = async (docId) => {
+    if (!gapiReady || !window.gapi?.client?.docs) {
+      setError("Google API not ready. Please wait a moment and try again.");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    try {
+      console.log("[Load] Loading document:", docId);
+
+      // Ensure token is set
+      window.gapi.client.setToken({ access_token: accessToken });
+
+      const response = await window.gapi.client.docs.documents.get({
+        documentId: docId,
+      });
+
+      console.log("[Load] Document retrieved");
+
+      // Extract text content
+      let text = "";
+      response.result.body.content.forEach((element) => {
+        if (element.paragraph) {
+          element.paragraph.elements.forEach((elem) => {
+            if (elem.textRun) {
+              text += elem.textRun.content;
+            }
+          });
+        }
+      });
+
+      console.log("[Load] Extracted", text.length, "characters");
+
+      setInputText(text);
+      if (editorRef.current) {
+        editorRef.current.textContent = text;
+      }
+      setCurrentGoogleDocId(docId);
+      setShowGoogleDocsModal(false);
+
+      alert("Document loaded successfully! You can now edit and sync changes.");
+    } catch (error) {
+      console.error("[Load Error]:", error);
+      console.error("[Load Error Details]:", {
+        status: error.status,
+        statusText: error.statusText,
+        message: error.message,
+      });
+
+      let errorMessage = "Failed to load document from Google Docs";
+
+      if (error.status === 401) {
+        errorMessage = "Authentication expired. Please sign in again.";
+        setIsGoogleSignedIn(false);
+        setAccessToken(null);
+      } else if (error.status === 404) {
+        errorMessage = "Document not found. It may have been deleted.";
+      } else if (error.status === 403) {
+        errorMessage =
+          "Permission denied. You don't have access to this document.";
+      } else if (error.message) {
+        errorMessage = `Load failed: ${error.message}`;
+      }
+
+      setError(errorMessage);
+      setTimeout(() => setError(null), 5000);
+    }
+  };
+
+  // (Keep all existing grammar check logic unchanged...)
+  useEffect(() => {
+    if (checkTimeoutRef.current) {
+      clearTimeout(checkTimeoutRef.current);
+    }
+
+    if (
+      editorRef.current?.querySelector("ul, ol, h1, h2, h3, blockquote, table")
+    ) {
+      setCorrections([]);
+      return;
+    }
+
+    if (!inputText.trim() || inputText.trim().length < 3) {
+      setCorrections([]);
+      return;
+    }
+
+    setIsChecking(true);
+
+    checkTimeoutRef.current = setTimeout(async () => {
+      await performGrammarCheck(inputText);
+      setIsChecking(false);
+    }, 800);
+
+    return () => {
+      if (checkTimeoutRef.current) {
+        clearTimeout(checkTimeoutRef.current);
+      }
+    };
+  }, [inputText]);
+
+  const performGrammarCheck = async (text) => {
+    const plainText = editorRef.current ? editorRef.current.textContent : text;
 
     if ("Proofreader" in window && window.Proofreader) {
       try {
         const availability = await window.Proofreader.availability();
-        console.log("[Polish] Proofreader availability:", availability);
-
         if (availability === "no") {
-          return polishWithFallback(text);
+          setCorrections([]);
+          return;
         }
 
-        const proofreader = await window.Proofreader.create({
-          expectedInputLanguages: ["en"],
-          expectedOutputLanguage: "en",
-          monitor(m) {
-            m.addEventListener("downloadprogress", (e) => {
-              console.log(
-                `[Polish] Model download progress: ${e.loaded * 100}%`
-              );
-            });
-          },
-        });
-
-        const proofreadResult = await proofreader.proofread(text);
-        console.log("[Polish] Proofread result:", proofreadResult);
+        const proofreader = await window.Proofreader.create();
+        const proofreadResult = await proofreader.proofread(plainText);
 
         if (
           !proofreadResult.corrections ||
           proofreadResult.corrections.length === 0
         ) {
           proofreader.destroy();
-          return {
-            result: text + "\n\n No grammar errors detected!",
-            isHTML: false,
-            method: "Proofreader",
-          };
+          setCorrections([]);
+          return;
         }
 
-        const sortedCorrections = [...proofreadResult.corrections].sort(
-          (a, b) => b.startIndex - a.startIndex
+        const correctionsWithIds = proofreadResult.corrections.map(
+          (corr, idx) => ({
+            ...corr,
+            id: `correction-${idx}-${Date.now()}`,
+            original: plainText.slice(corr.startIndex, corr.endIndex),
+            applied: false,
+          })
         );
 
-        let highlightedHTML = text;
-
-        for (const corr of sortedCorrections) {
-          const original = text.slice(corr.startIndex, corr.endIndex);
-          const safeCorrection = corr.correction
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-          const safeOriginal = original
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-
-          const highlighted = `<span class="grammar-correction" data-original="${safeOriginal}">${safeCorrection}</span>`;
-
-          highlightedHTML =
-            highlightedHTML.substring(0, corr.startIndex) +
-            highlighted +
-            highlightedHTML.substring(corr.endIndex);
-        }
-
+        setCorrections(correctionsWithIds);
         proofreader.destroy();
-        return {
-          result: highlightedHTML,
-          isHTML: true,
-          correctionCount: proofreadResult.corrections.length,
-          method: "Proofreader",
-        };
       } catch (err) {
-        console.error("[Polish] Proofreader API failed:", err);
+        console.error("[Grammar Check] Error:", err);
+        setCorrections([]);
       }
+    } else {
+      setCorrections([]);
     }
-
-    return polishWithFallback(text);
   };
 
-  const rephraseWithRewriter = async (text) => {
-    console.log("[Rephrase] Attempting to use Chrome Rewriter API...");
+  const applyGrammarHighlights = () => {
+    if (!editorRef.current || corrections.length === 0) return;
+
+    const hasLists = editorRef.current.querySelector(
+      "ul, ol, li, h1, h2, h3, blockquote, table"
+    );
+    if (hasLists) {
+      return;
+    }
+
+    const textContent = editorRef.current.textContent;
+    const selection = window.getSelection();
+    let cursorPosition = 0;
+
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      const preCaretRange = range.cloneRange();
+      preCaretRange.selectNodeContents(editorRef.current);
+      preCaretRange.setEnd(range.endContainer, range.endOffset);
+      cursorPosition = preCaretRange.toString().length;
+    }
+
+    let segments = [];
+    let lastIndex = 0;
+
+    const sortedForward = [...corrections].sort(
+      (a, b) => a.startIndex - b.startIndex
+    );
+
+    sortedForward.forEach((correction) => {
+      if (correction.startIndex > lastIndex) {
+        segments.push({
+          text: textContent.substring(lastIndex, correction.startIndex),
+          isError: false,
+        });
+      }
+
+      segments.push({
+        text: textContent.substring(correction.startIndex, correction.endIndex),
+        isError: true,
+        correctionId: correction.id,
+        correction: correction,
+      });
+
+      lastIndex = correction.endIndex;
+    });
+
+    if (lastIndex < textContent.length) {
+      segments.push({
+        text: textContent.substring(lastIndex),
+        isError: false,
+      });
+    }
+
+    let newHTML = "";
+    segments.forEach((segment) => {
+      const escapedText = segment.text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/\n/g, "<br>");
+
+      if (segment.isError) {
+        newHTML += `<span class="grammar-error" data-correction-id="${segment.correctionId}">${escapedText}</span>`;
+      } else {
+        newHTML += escapedText;
+      }
+    });
+
+    editorRef.current.innerHTML = newHTML;
+
+    try {
+      const range = document.createRange();
+      const sel = window.getSelection();
+      let charCount = 0;
+      let nodeStack = [editorRef.current];
+      let node,
+        foundStart = false;
+
+      while (!foundStart && (node = nodeStack.pop())) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const nextCharCount = charCount + node.length;
+          if (cursorPosition <= nextCharCount) {
+            range.setStart(node, cursorPosition - charCount);
+            range.collapse(true);
+            foundStart = true;
+          }
+          charCount = nextCharCount;
+        } else {
+          for (let i = node.childNodes.length - 1; i >= 0; i--) {
+            nodeStack.push(node.childNodes[i]);
+          }
+        }
+      }
+
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {
+      console.log("Cursor restoration failed:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (!isUpdatingRef.current && corrections.length > 0) {
+      applyGrammarHighlights();
+    }
+  }, [corrections]);
+
+  const handleInput = (e) => {
+    isUpdatingRef.current = true;
+    const text = e.target.textContent || "";
+    setInputText(text);
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 0);
+  };
+
+  const handleTextSelection = () => {
+    const selection = window.getSelection();
+    const selected = selection.toString().trim();
+
+    if (
+      selected.length > 0 &&
+      editorRef.current?.contains(selection.anchorNode)
+    ) {
+      setSelectedText(selected);
+
+      const range = selection.getRangeAt(0);
+      const preSelectionRange = range.cloneRange();
+      preSelectionRange.selectNodeContents(editorRef.current);
+      preSelectionRange.setEnd(range.startContainer, range.startOffset);
+      const start = preSelectionRange.toString().length;
+
+      setSelectionRange({
+        start: start,
+        end: start + selected.length,
+      });
+    } else {
+      setSelectedText("");
+      setSelectionRange(null);
+    }
+  };
+
+  useEffect(() => {
+    document.addEventListener("selectionchange", handleTextSelection);
+    return () => {
+      document.removeEventListener("selectionchange", handleTextSelection);
+    };
+  }, []);
+
+  const handleRephrase = async () => {
+    const textToRephrase = selectedText || inputText;
+
+    if (!textToRephrase.trim()) {
+      setError("Please select or write some text to rewrite!");
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    setIsRephrasing(true);
+    setRephrasedResult("");
 
     if ("Rewriter" in window && window.Rewriter) {
       try {
         const availability = await window.Rewriter.availability();
-        console.log("[Rephrase] Rewriter availability:", availability);
 
         if (availability === "no") {
-          return {
-            result:
-              text + "\n\n---\n⚠️ Note: Chrome Rewriter API is not available.",
-            method: "unavailable",
-          };
+          setRephrasedResult(
+            "⚠️ Chrome Rewriter API is not available in this browser."
+          );
+          setIsRephrasing(false);
+          return;
         }
 
-        // Create rewriter with options
         const options = {
           tone: tone,
           format: "plain-text",
           length: length,
         };
 
-        // Add monitor for download progress if needed
-        if (availability !== "readily") {
-          options.monitor = (m) => {
-            m.addEventListener("downloadprogress", (e) => {
-              console.log(
-                `[Rephrase] Download progress: ${e.loaded}/${e.total}`
-              );
-            });
-          };
-        }
-
         const rewriter = await window.Rewriter.create(options);
-
-        console.log(
-          "[Rephrase] Rewriter session created, starting streaming..."
-        );
-
-        // Use streaming API
-        const stream = rewriter.rewriteStreaming(text);
+        const stream = rewriter.rewriteStreaming(textToRephrase);
         let rephrased = "";
 
         for await (const chunk of stream) {
-          console.log("[Rephrase] Received chunk:", chunk);
-          // Accumulate chunks - each chunk is a delta/addition
           rephrased += chunk;
-          // Update in real-time during streaming
-          setPolishedText(rephrased);
+          setRephrasedResult(rephrased);
         }
 
-        console.log("[Rephrase] Streaming complete");
-        console.log("[Rephrase] Final rephrased text:", rephrased);
-        console.log("[Rephrase] Final text length:", rephrased.length);
-
-        // Set final result with metadata
-        const finalResult =
-          rephrased + `\n\nRephrased (Tone: ${tone}, Length: ${length})`;
-        setPolishedText(finalResult);
-
         rewriter.destroy();
-
-        return {
-          result: finalResult,
-          method: "Rewriter",
-        };
       } catch (err) {
-        console.error("[Rephrase] Rewriter API failed:", err);
-        return {
-          result: text + `\n\n---\n⚠️ Error: ${err.message}`,
-          method: "error",
-        };
+        console.error("[Rephrase] Error:", err);
+        setRephrasedResult(`⚠️ Error: ${err.message}`);
+      }
+    } else {
+      setRephrasedResult(
+        "⚠️ Chrome Rewriter API is not available in this browser."
+      );
+    }
+
+    setIsRephrasing(false);
+  };
+
+  const handleUseRephrasedText = () => {
+    isUpdatingRef.current = true;
+
+    if (selectedText && selectionRange) {
+      const newText =
+        inputText.substring(0, selectionRange.start) +
+        rephrasedResult +
+        inputText.substring(selectionRange.end);
+      setInputText(newText);
+      if (editorRef.current) {
+        editorRef.current.textContent = newText;
+      }
+    } else {
+      setInputText(rephrasedResult);
+      if (editorRef.current) {
+        editorRef.current.textContent = rephrasedResult;
       }
     }
 
-    console.log("[Rephrase] Rewriter API not found");
-    return {
-      result:
-        text +
-        "\n\n---\n⚠️ Note: Chrome Rewriter API is not available in this browser.",
-      method: "unavailable",
-    };
+    setRephrasedResult("");
+    setSelectedText("");
+    setSelectionRange(null);
+
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 100);
   };
 
-  const handleProcess = async () => {
-    if (!inputText.trim()) {
-      setError("Please enter some text to process!");
+  const handlePlagiarismCheck = async () => {
+    const textToCheck = inputText.trim();
+
+    if (!textToCheck) {
+      setError("Please write some text to check for originality!");
+      setTimeout(() => setError(null), 3000);
       return;
     }
 
-    setLoading(true);
+    setIsCheckingPlagiarism(true);
+    setPlagiarismResult(null);
     setError(null);
-    setPolishedText("");
-    setIsHTML(false);
-    setCorrectionCount(0);
 
     try {
-      let result;
+      const blob = new Blob([textToCheck], { type: "text/plain" });
+      const file = new File([blob], "document.txt", { type: "text/plain" });
 
-      if (activeTab === "grammar") {
-        console.log("[Process] Processing grammar improvement...");
-        result = await polishWithProofreader(inputText);
+      console.log("[Originality Check] Checking document...");
+      const result = await checkAIOnly(file, true);
 
-        if (!result || !result.result) {
-          throw new Error("No result returned from processing function");
-        }
-
-        setPolishedText(result.result);
-        setIsHTML(result.isHTML || false);
-        setCorrectionCount(result.correctionCount || 0);
-      } else {
-        console.log("[Process] Processing rephrase...");
-        result = await rephraseWithRewriter(inputText);
-        // Don't set polishedText here - it's already being set in real-time during streaming
-      }
-
-      console.log("[Process] Successfully processed text");
+      console.log("[Originality Check] Result:", result);
+      setPlagiarismResult(result);
     } catch (err) {
-      console.error("[Process] Caught error:", err);
-      setError(
-        "An unexpected error occurred during text processing.\n\n" +
-          `Error: ${err.message}`
-      );
+      console.error("[Originality Check] Error:", err);
+      if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
+        setError(
+          "Analysis is taking longer than expected. The models are loading for the first time. Please try again - it will be faster next time!"
+        );
+      } else {
+        const backendDetail = err.response?.data?.detail;
+        if (Array.isArray(backendDetail)) {
+          setError(backendDetail[0]?.msg || JSON.stringify(backendDetail));
+        } else if (typeof backendDetail === "object") {
+          setError(backendDetail?.msg || JSON.stringify(backendDetail));
+        } else {
+          setError(err.message || "An error occurred during originality check");
+        }
+      }
     } finally {
-      setLoading(false);
+      setIsCheckingPlagiarism(false);
     }
   };
 
-  const handleCopy = () => {
-    // Extract plain text from HTML if it contains HTML
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = polishedText;
-    const plainText = tempDiv.textContent || tempDiv.innerText || polishedText;
-    navigator.clipboard.writeText(plainText);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
+  // Formatting functions
+  const execCommand = (command, value = null) => {
+    document.execCommand(command, false, value);
+    editorRef.current?.focus();
   };
 
-  const handleDownload = () => {
-    const element = document.createElement("a");
-    // Extract plain text from HTML if it contains HTML
-    const tempDiv = document.createElement("div");
-    tempDiv.innerHTML = polishedText;
-    const plainText = tempDiv.textContent || tempDiv.innerText || polishedText;
-    const file = new Blob([plainText], { type: "text/plain" });
-    element.href = URL.createObjectURL(file);
-    element.download = `${activeTab}-text-${Date.now()}.txt`;
-    document.body.appendChild(element);
-    element.click();
-    document.body.removeChild(element);
+  const handleBold = () => execCommand("bold");
+  const handleItalic = () => execCommand("italic");
+  const handleUnderline = () => execCommand("underline");
+  const handleAlignLeft = () => execCommand("justifyLeft");
+  const handleAlignCenter = () => execCommand("justifyCenter");
+  const handleAlignRight = () => execCommand("justifyRight");
+  const handleAlignJustify = () => execCommand("justifyFull");
+
+  const handleH1 = () => execCommand("formatBlock", "<h1>");
+  const handleH2 = () => execCommand("formatBlock", "<h2>");
+  const handleH3 = () => execCommand("formatBlock", "<h3>");
+  const handleBlockquote = () => execCommand("formatBlock", "<blockquote>");
+  const handleParagraph = () => execCommand("formatBlock", "<p>");
+  const handleHorizontalRule = () => execCommand("insertHorizontalRule");
+
+  const handleInsertLink = () => {
+    const url = prompt("Enter URL:");
+    if (url) {
+      execCommand("createLink", url);
+    }
   };
 
-  const features = [
-    {
-      icon: <Target className="w-6 h-6" />,
-      title: "Grammar Correction",
-      description: "Fix grammar, spelling, and punctuation errors instantly",
-    },
-    {
-      icon: <RefreshCw className="w-6 h-6" />,
-      title: "Smart Rephrasing",
-      description: "Rewrite text with different tones and lengths",
-    },
-    {
-      icon: <Sparkles className="w-6 h-6" />,
-      title: "Privacy-First",
-      description: "All processing happens on your device",
-    },
-  ];
+  const handleInsertTable = () => {
+    setShowTableModal(true);
+  };
+
+  const insertTable = () => {
+    let tableHTML =
+      '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; margin: 16px 0;">';
+
+    for (let i = 0; i < tableRows; i++) {
+      tableHTML += "<tr>";
+      for (let j = 0; j < tableCols; j++) {
+        if (i === 0) {
+          tableHTML +=
+            '<th style="background-color: #f3f4f6; padding: 8px; border: 1px solid #d1d5db;">Header</th>';
+        } else {
+          tableHTML +=
+            '<td style="padding: 8px; border: 1px solid #d1d5db;">Cell</td>';
+        }
+      }
+      tableHTML += "</tr>";
+    }
+    tableHTML += "</table>";
+
+    execCommand("insertHTML", tableHTML);
+    setShowTableModal(false);
+    setTableRows(3);
+    setTableCols(3);
+  };
 
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
-      <div className="flex min-h-screen">
-        <Sidebar />
+    <main className="bg-gray-50 min-h-screen flex">
+      <Sidebar />
 
-        <div className="flex-1 flex justify-center items-start p-6">
-          <article className="bg-white rounded-t-3xl shadow-xl p-6 w-[90%] max-w-6xl min-h-screen">
-            {/* Hero Section */}
-            <section className="relative h-64 rounded-3xl overflow-hidden mb-8 shadow-2xl">
-              <div className="absolute inset-0">
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{ backgroundImage: "url('/images/polishPage.jpg')" }}
-                />
-                <div className="absolute inset-0 bg-black/30" />
-              </div>
-
-              <div className="absolute top-10 right-20 w-32 h-32 bg-white/10 rounded-full blur-2xl animate-pulse"></div>
-              <div
-                className="absolute bottom-10 left-20 w-40 h-40 bg-pink-300/20 rounded-full blur-3xl animate-pulse"
-                style={{ animationDelay: "1s" }}
-              ></div>
-
-              <div className="absolute inset-0 flex flex-col justify-center items-center text-center px-6">
-                <div className="inline-block mb-3 px-4 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
-                  ✨ Chrome AI APIs
-                </div>
-                <h1 className="text-5xl font-bold text-white mb-3 tracking-tight">
-                  Polish Your Writing
+      <div
+        className={`flex-1 flex flex-col transition-all duration-300 ${
+          showAIPanel ? "mr-96" : ""
+        }`}
+      >
+        {/* Top Toolbar */}
+        <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+          <div className="max-w-6xl mx-auto px-6 py-2">
+            {/* Title and Buttons */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Type className="w-5 h-5 text-gray-600" />
+                <h1 className="text-lg font-semibold text-gray-800">
+                  Polish Document
                 </h1>
-                <p className="text-purple-100 text-lg max-w-2xl">
-                  Fix grammar errors and rephrase text with Google's on-device
-                  AI
-                </p>
+                {currentGoogleDocId && (
+                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full flex items-center gap-1">
+                    <Cloud size={12} />
+                    Linked to Google Docs
+                  </span>
+                )}
               </div>
-            </section>
 
-            {/* Feature Cards */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              {features.map((feature, index) => (
-                <div
-                  key={index}
-                  className="bg-white rounded-2xl p-5 shadow-md hover:shadow-xl transition-all hover:-translate-y-1 border border-purple-100"
+              <div className="flex items-center gap-2">
+                {/* NEW: Google Docs Button */}
+                <button
+                  onClick={() => setShowGoogleDocsModal(true)}
+                  className="bg-white border-2 border-blue-600 text-blue-600 px-4 py-2 rounded-lg font-medium hover:bg-blue-50 transition-all flex items-center gap-2 shadow-sm"
                 >
-                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-500 via-yellow-300 to-white-200 rounded-xl flex items-center justify-center text-white mb-3">
-                    {feature.icon}
-                  </div>
-                  <h3 className="font-bold text-gray-800 mb-1">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-gray-600">{feature.description}</p>
-                </div>
-              ))}
+                  <CloudUpload size={18} />
+                  Google Docs
+                </button>
+
+                {/* Sync Button (shown when linked) */}
+                {currentGoogleDocId && (
+                  <button
+                    onClick={syncToGoogleDoc}
+                    disabled={isSyncing}
+                    className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-all flex items-center gap-2 shadow-md disabled:opacity-50"
+                  >
+                    {isSyncing ? (
+                      <Loader size={18} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={18} />
+                    )}
+                    Sync
+                  </button>
+                )}
+
+                <button
+                  onClick={() => setShowAIPanel(!showAIPanel)}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg font-medium hover:bg-blue-700 transition-all flex items-center gap-2 shadow-md hover:shadow-lg relative"
+                >
+                  <Sparkles size={18} />
+                  AI Assistance
+                  {corrections.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {corrections.length}
+                    </span>
+                  )}
+                </button>
+              </div>
             </div>
 
-            {/* Main Card */}
-            <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
-              {/* Tabs */}
-              <div className="bg-gradient-to-r from-blue-50 via-gray-100 to-blue-50 px-8 py-4">
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={() => setActiveTab("grammar")}
-                    className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
-                      activeTab === "grammar"
-                        ? "bg-yellow-300 text-white shadow-lg"
-                        : "bg-white text-yellow-400 hover:bg-gray-50"
-                    }`}
+            {/* Formatting Toolbar */}
+            <div className="flex items-center gap-1 py-2 border-t border-gray-100 flex-wrap">
+              <div className="flex items-center gap-1 pr-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleBold}
+                  icon={<Bold size={18} />}
+                  title="Bold (Ctrl+B)"
+                />
+                <ToolbarButton
+                  onClick={handleItalic}
+                  icon={<Italic size={18} />}
+                  title="Italic (Ctrl+I)"
+                />
+                <ToolbarButton
+                  onClick={handleUnderline}
+                  icon={<UnderlineIcon size={18} />}
+                  title="Underline (Ctrl+U)"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 px-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleH1}
+                  icon={<Heading1 size={18} />}
+                  title="Heading 1"
+                />
+                <ToolbarButton
+                  onClick={handleH2}
+                  icon={<Heading2 size={18} />}
+                  title="Heading 2"
+                />
+                <ToolbarButton
+                  onClick={handleH3}
+                  icon={<Heading3 size={18} />}
+                  title="Heading 3"
+                />
+                <ToolbarButton
+                  onClick={handleParagraph}
+                  icon={<Type size={18} />}
+                  title="Normal Text"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 px-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleAlignLeft}
+                  icon={<AlignLeft size={18} />}
+                  title="Align Left"
+                />
+                <ToolbarButton
+                  onClick={handleAlignCenter}
+                  icon={<AlignCenter size={18} />}
+                  title="Align Center"
+                />
+                <ToolbarButton
+                  onClick={handleAlignRight}
+                  icon={<AlignRight size={18} />}
+                  title="Align Right"
+                />
+                <ToolbarButton
+                  onClick={handleAlignJustify}
+                  icon={<AlignJustify size={18} />}
+                  title="Justify"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 px-3 border-r border-gray-200">
+                <ToolbarButton
+                  onClick={handleInsertLink}
+                  icon={<Link size={18} />}
+                  title="Insert Link"
+                />
+                <ToolbarButton
+                  onClick={handleHorizontalRule}
+                  icon={<Minus size={18} />}
+                  title="Horizontal Line"
+                />
+              </div>
+
+              <div className="flex items-center gap-1 pl-3">
+                <ToolbarButton
+                  onClick={handleBlockquote}
+                  icon={<Quote size={18} />}
+                  title="Quote"
+                />
+              </div>
+            </div>
+          </div>
+
+          {selectedText && (
+            <div className="max-w-6xl mx-auto px-6 py-2 border-t border-gray-100 bg-blue-50">
+              <div className="text-sm text-blue-700 flex items-center gap-2">
+                <CheckCheck className="w-4 h-4" />
+                <span className="font-medium">
+                  {selectedText.length} characters selected
+                </span>
+                <span className="text-blue-400">•</span>
+                <span>
+                  Open AI Assistance and go to "Rewrite" tab to rephrase
+                  selection
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <div className="max-w-6xl mx-auto w-full px-6 pt-4">
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Writing Area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-6xl mx-auto px-6 py-8">
+            <div className="bg-white rounded-lg shadow-lg min-h-[800px] p-16">
+              <div
+                ref={editorRef}
+                contentEditable
+                onInput={handleInput}
+                onClick={(e) => {
+                  const target = e.target;
+                  if (target.classList.contains("grammar-error")) {
+                    const correctionId =
+                      target.getAttribute("data-correction-id");
+                    const correction = corrections.find(
+                      (c) => c.id === correctionId
+                    );
+                    if (correction) {
+                      setShowAIPanel(true);
+                      setActiveTab("grammar");
+                      setTimeout(() => {
+                        const correctionElement = document.querySelector(
+                          `[data-correction-card="${correctionId}"]`
+                        );
+                        if (correctionElement) {
+                          correctionElement.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                          correctionElement.classList.add(
+                            "highlight-correction"
+                          );
+                          setTimeout(() => {
+                            correctionElement.classList.remove(
+                              "highlight-correction"
+                            );
+                          }, 2000);
+                        }
+                      }, 100);
+                    }
+                  }
+                }}
+                className="min-h-[700px] focus:outline-none text-gray-800 leading-relaxed"
+                style={{
+                  fontSize: "16px",
+                  lineHeight: "1.8",
+                  fontFamily:
+                    "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+                }}
+                data-placeholder="Start writing your document..."
+                suppressContentEditableWarning
+              />
+            </div>
+
+            <div className="mt-4 text-center text-sm text-gray-500">
+              {inputText.length} characters •{" "}
+              {inputText.split(/\s+/).filter((w) => w.length > 0).length} words
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Assistance Slide-in Panel (Keep existing panel code...) */}
+      <div
+        className={`fixed right-0 top-0 h-full w-96 bg-white shadow-2xl transform transition-transform duration-300 ease-in-out z-50 ${
+          showAIPanel ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        {/* Panel Header */}
+        <div className="bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 p-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-6 h-6 text-purple-600" />
+            <h2 className="text-xl font-bold">AI Assistance</h2>
+          </div>
+          <button
+            onClick={() => setShowAIPanel(false)}
+            className="hover:bg-white/30 p-2 rounded-lg transition-all"
+          >
+            <X className="w-6 h-6 text-purple-700" />
+          </button>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="bg-white border-b border-gray-200 flex">
+          <button
+            onClick={() => setActiveTab("grammar")}
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "grammar"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <FileCheck size={16} />
+            Grammar
+            {corrections.length > 0 && activeTab !== "grammar" && (
+              <span className="bg-orange-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {corrections.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("rewrite")}
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "rewrite"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Wand2 size={16} />
+            Rewrite
+          </button>
+          <button
+            onClick={() => setActiveTab("plagiarism")}
+            className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
+              activeTab === "plagiarism"
+                ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
+                : "text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            <Search size={16} />
+            Originality
+          </button>
+        </div>
+
+        {/* Panel Content */}
+        <div className="h-full overflow-y-auto pb-32">
+          {/* Grammar Tab */}
+          {activeTab === "grammar" && (
+            <>
+              {corrections.length > 0 ? (
+                <div className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <AlertCircle className="w-5 h-5 text-orange-500" />
+                    <h3 className="font-bold text-gray-800 text-lg">
+                      Grammar Issues ({corrections.length})
+                    </h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    {corrections.map((correction, index) => (
+                      <div
+                        key={correction.id}
+                        data-correction-card={correction.id}
+                        className="p-4 bg-gray-50 rounded-xl border border-gray-200 hover:border-blue-300 transition-all"
+                      >
+                        <div className="text-xs text-gray-500 font-semibold mb-2">
+                          Issue {index + 1}
+                        </div>
+
+                        <div className="mb-3">
+                          <div className="text-xs text-gray-600 mb-1">
+                            Original:
+                          </div>
+                          <div className="text-sm text-red-600 line-through bg-red-50 p-2 rounded">
+                            {correction.original}
+                          </div>
+                        </div>
+
+                        <div className="mb-4">
+                          <div className="text-xs text-gray-600 mb-1">
+                            Suggestion:
+                          </div>
+                          <div className="text-sm text-green-700 font-semibold bg-green-50 p-2 rounded">
+                            {correction.correction}
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              const plainText = editorRef.current.textContent;
+                              const newText =
+                                plainText.substring(0, correction.startIndex) +
+                                correction.correction +
+                                plainText.substring(correction.endIndex);
+
+                              editorRef.current.textContent = newText;
+                              setInputText(newText);
+                              setCorrections((prev) =>
+                                prev.filter((c) => c.id !== correction.id)
+                              );
+                            }}
+                            className="flex-1 bg-green-600 text-white px-4 py-2.5 rounded-lg hover:bg-green-700 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                          >
+                            <CheckCheck size={16} />
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => {
+                              setCorrections((prev) =>
+                                prev.filter((c) => c.id !== correction.id)
+                              );
+                            }}
+                            className="flex-1 bg-gray-300 text-gray-700 px-4 py-2.5 rounded-lg hover:bg-gray-400 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                          >
+                            <X size={16} />
+                            Ignore
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="p-6">
+                  <div className="text-center py-12">
+                    <CheckCheck className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                      No Issues Found
+                    </h3>
+                    <p className="text-gray-600 text-sm">
+                      Your document looks great! No grammar issues detected.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Rewrite Tab */}
+          {activeTab === "rewrite" && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Wand2 className="w-5 h-5 text-purple-500" />
+                <h3 className="font-bold text-gray-800 text-lg">
+                  Rewrite Text
+                </h3>
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Text to Rewrite
+                </label>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 max-h-40 overflow-y-auto">
+                  {selectedText || inputText ? (
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">
+                      {selectedText || inputText}
+                    </p>
+                  ) : (
+                    <p className="text-gray-400 text-sm italic">
+                      Write or select text in the editor to rewrite it
+                    </p>
+                  )}
+                </div>
+                {selectedText && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    ✓ Selection will be rewritten
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-6 space-y-4">
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    Tone
+                  </label>
+                  <select
+                    value={tone}
+                    onChange={(e) => setTone(e.target.value)}
+                    disabled={isRephrasing}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-800 shadow-md focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 hover:border-indigo-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer"
                   >
-                    <CheckCircle size={20} />
-                    Grammar Check
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("rephrase")}
-                    className={`px-6 py-3 rounded-xl font-semibold transition-all flex items-center gap-2 ${
-                      activeTab === "rephrase"
-                        ? "bg-yellow-300 text-white shadow-lg"
-                        : "bg-white text-yellow-400 hover:bg-gray-50"
-                    }`}
+                    <option value="as-is">As Is</option>
+                    <option value="more-formal">More Formal</option>
+                    <option value="more-casual">More Casual</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    Length
+                  </label>
+                  <select
+                    value={length}
+                    onChange={(e) => setLength(e.target.value)}
+                    disabled={isRephrasing}
+                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm text-gray-800 shadow-md focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 hover:border-indigo-300 transition-all disabled:opacity-50 disabled:cursor-not-allowed appearance-none cursor-pointer"
                   >
-                    <RefreshCw size={20} />
-                    Rephrase
-                  </button>
+                    <option value="as-is">As Is</option>
+                    <option value="shorter">Shorter</option>
+                    <option value="longer">Longer</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Content Area */}
-              <div className="p-8">
-                {/* Error Display */}
-                {error && (
-                  <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-red-700 font-medium">Error</p>
-                      <p className="text-red-600 text-sm whitespace-pre-line">
-                        {error}
-                      </p>
-                    </div>
-                  </div>
+              <button
+                onClick={handleRephrase}
+                disabled={isRephrasing || (!selectedText && !inputText.trim())}
+                className="w-full bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 px-6 py-3 rounded-xl font-semibold shadow-sm hover:from-purple-200 hover:to-pink-200 focus:ring-2 focus:ring-purple-300 focus:outline-none transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+              >
+                {isRephrasing ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Rewriting...
+                  </>
+                ) : (
+                  <>
+                    <Wand2 size={20} />
+                    Generate Rewrite
+                  </>
                 )}
+              </button>
 
-                {/* Info Box */}
-                <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                  <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5" />
-                    {activeTab === "grammar"
-                      ? "Grammar Check"
-                      : "Rephrase Text"}
-                  </h3>
-                  <ul className="text-sm text-blue-700 space-y-1">
-                    {activeTab === "grammar" ? (
-                      <>
-                        <li>• Corrects grammar and spelling mistakes</li>
-                        <li>• Fixes punctuation errors</li>
-                        <li>• Uses Chrome's on-device Proofreader API</li>
-                        <li>
-                          • Falls back to basic algorithm if API unavailable
-                        </li>
-                      </>
-                    ) : (
-                      <>
-                        <li>• Rewrites text with different tones and styles</li>
-                        <li>• Adjust length (shorter, longer, or as-is)</li>
-                        <li>• Uses Chrome's on-device Rewriter API</li>
-                        <li>• Choose from formal, neutral, or casual tones</li>
-                      </>
-                    )}
-                  </ul>
+              {isRephrasing && !rephrasedResult && (
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-blue-700 text-xs">
+                    🔄 Initializing AI rewriter... This may take a moment on
+                    first use.
+                  </p>
                 </div>
+              )}
 
-                {/* Rephrase Options */}
-                {activeTab === "rephrase" && (
-                  <div className="mb-6 flex gap-6">
-                    {/* Tone Dropdown */}
-                    <div className="relative">
-                      <label className="block text-gray-700 font-semibold mb-2">
-                        Tone
-                      </label>
-                      <div className="relative">
-                        <button
-                          onClick={() => {
-                            setIsToneOpen((prev) => !prev);
-                            setIsLengthOpen(false); // close other
-                          }}
-                          className="w-48 px-4 py-3 border-2 border-gray-300 rounded-xl bg-white hover:border-purple-500 flex justify-between items-center transition-all"
-                          disabled={loading}
-                        >
-                          <span className="capitalize">
-                            {tone === "as-is"
-                              ? "As Is"
-                              : tone === "more-formal"
-                              ? "More Formal"
-                              : "More Casual"}
-                          </span>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className={`h-4 w-4 text-gray-500 transform transition-transform ${
-                              isToneOpen ? "rotate-180" : ""
-                            }`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 9l-7 7-7-7"
-                            />
-                          </svg>
-                        </button>
-
-                        {isToneOpen && (
-                          <div className="absolute top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-10">
-                            {["as-is", "more-formal", "more-casual"].map(
-                              (option) => (
-                                <div
-                                  key={option}
-                                  onClick={() => {
-                                    setTone(option);
-                                    setIsToneOpen(false);
-                                  }}
-                                  className={`px-4 py-2 cursor-pointer hover:bg-purple-50 ${
-                                    tone === option
-                                      ? "bg-purple-100 font-semibold text-purple-700"
-                                      : ""
-                                  }`}
-                                >
-                                  {option === "as-is"
-                                    ? "As Is"
-                                    : option === "more-formal"
-                                    ? "More Formal"
-                                    : "More Casual"}
-                                </div>
-                              )
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Length Dropdown */}
-                    <div className="relative">
-                      <label className="block text-gray-700 font-semibold mb-2">
-                        Length
-                      </label>
-                      <div className="relative">
-                        <button
-                          onClick={() => {
-                            setIsLengthOpen((prev) => !prev);
-                            setIsToneOpen(false); // close other
-                          }}
-                          className="w-48 px-4 py-3 border-2 border-gray-300 rounded-xl bg-white hover:border-purple-500 flex justify-between items-center transition-all"
-                          disabled={loading}
-                        >
-                          <span className="capitalize">
-                            {length === "as-is"
-                              ? "As Is"
-                              : length === "shorter"
-                              ? "Shorter"
-                              : "Longer"}
-                          </span>
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className={`h-4 w-4 text-gray-500 transform transition-transform ${
-                              isLengthOpen ? "rotate-180" : ""
-                            }`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 9l-7 7-7-7"
-                            />
-                          </svg>
-                        </button>
-
-                        {isLengthOpen && (
-                          <div className="absolute top-full mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-xl z-10">
-                            {["as-is", "shorter", "longer"].map((option) => (
-                              <div
-                                key={option}
-                                onClick={() => {
-                                  setLength(option);
-                                  setIsLengthOpen(false);
-                                }}
-                                className={`px-4 py-2 cursor-pointer hover:bg-purple-50 ${
-                                  length === option
-                                    ? "bg-purple-100 font-semibold text-purple-700"
-                                    : ""
-                                }`}
-                              >
-                                {option === "as-is"
-                                  ? "As Is"
-                                  : option === "shorter"
-                                  ? "Shorter"
-                                  : "Longer"}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Input Area */}
-                <div className="mb-6">
-                  <label className="block text-gray-700 font-semibold mb-3 flex items-center gap-2">
-                    <FileText className="w-5 h-5" />
-                    Your Text
+              {rephrasedResult && (
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    Rewritten Result
                   </label>
-                  <textarea
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Paste or type your text here..."
-                    className="w-full h-64 p-4 border-2 border-gray-300 rounded-2xl focus:border-blue-500 focus:outline-none resize-none bg-gradient-to-br from-gray-50/50 to-blue-50/50 text-gray-800"
-                    disabled={loading}
-                  />
-                  <div className="mt-2 text-sm text-gray-500 text-right">
-                    {inputText.length} characters
+                  <div className="p-4 bg-gradient-to-br from-green-50 to-blue-50 rounded-lg border-2 border-green-200 min-h-32 mb-4">
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">
+                      {rephrasedResult}
+                    </p>
                   </div>
-                </div>
 
-                {/* Action Button */}
-                <div className="text-center mb-6">
+                  {!rephrasedResult.includes("⚠️") && (
+                    <button
+                      onClick={handleUseRephrasedText}
+                      className="w-full bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+                    >
+                      <CheckCheck size={20} />
+                      {selectedText ? "Replace Selection" : "Replace Document"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Originality/Plagiarism Tab */}
+          {activeTab === "plagiarism" && (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Search className="w-5 h-5 text-blue-500" />
+                <h3 className="font-bold text-gray-800 text-lg">
+                  Originality Check
+                </h3>
+              </div>
+
+              {!plagiarismResult ? (
+                <>
+                  <div className="w-full bg-white/60 backdrop-blur-md border border-gray-200 rounded-xl px-6 py-4 shadow-sm hover:bg-white/70 transition-all duration-300 mb-6">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-purple-500" />
+                      What we check
+                    </h4>
+
+                    <ul className="text-sm text-gray-500 space-y-1 pl-1">
+                      <li>Content accuracy</li>
+                      <li>Grammar and tone</li>
+                      <li>Readability and clarity</li>
+                    </ul>
+                  </div>
+
                   <button
-                    onClick={handleProcess}
-                    disabled={loading || !inputText.trim()}
-                    className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-10 py-4 rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 transition-all flex items-center justify-center gap-3 mx-auto shadow-lg hover:shadow-2xl hover:scale-105 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handlePlagiarismCheck}
+                    disabled={isCheckingPlagiarism || !inputText.trim()}
+                    className="w-full bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 px-6 py-3 rounded-xl font-semibold shadow-sm hover:from-purple-200 hover:to-pink-200 focus:ring-2 focus:ring-purple-300 focus:outline-none transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
                   >
-                    {loading ? (
+                    {isCheckingPlagiarism ? (
                       <>
                         <Loader className="w-5 h-5 animate-spin" />
-                        {activeTab === "grammar"
-                          ? "Checking..."
-                          : "Rephrasing..."}
+                        Analyzing...
                       </>
                     ) : (
                       <>
-                        {activeTab === "grammar" ? (
+                        <Search size={20} />
+                        Check Originality
+                      </>
+                    )}
+                  </button>
+
+                  {isCheckingPlagiarism && (
+                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <p className="text-blue-700 text-xs">
+                        🔄 This may take 30-60 seconds for first-time model
+                        loading...
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div
+                      className={`p-4 rounded-xl border-2 ${
+                        plagiarismResult.overall_risk === "high"
+                          ? "bg-red-50 border-red-300"
+                          : plagiarismResult.overall_risk === "medium"
+                          ? "bg-yellow-50 border-yellow-300"
+                          : "bg-green-50 border-green-300"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        {plagiarismResult.overall_risk === "high" ? (
+                          <AlertTriangle className="w-5 h-5 text-red-600" />
+                        ) : plagiarismResult.overall_risk === "medium" ? (
+                          <AlertCircle className="w-5 h-5 text-yellow-600" />
+                        ) : (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        )}
+                        <h4
+                          className={`font-bold ${
+                            plagiarismResult.overall_risk === "high"
+                              ? "text-red-800"
+                              : plagiarismResult.overall_risk === "medium"
+                              ? "text-yellow-800"
+                              : "text-green-800"
+                          }`}
+                        >
+                          Overall Risk:{" "}
+                          {plagiarismResult.overall_risk.toUpperCase()}
+                        </h4>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="w-5 h-5 text-purple-600" />
+                        <h4 className="font-bold text-gray-800">
+                          AI Content Detection
+                        </h4>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">AI Probability:</span>
+                          <span className="font-semibold text-gray-800">
+                            {plagiarismResult.ai_probability}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Confidence:</span>
+                          <span className="font-semibold text-gray-800">
+                            {plagiarismResult.ai_confidence}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">AI Generated:</span>
+                          <span
+                            className={`font-semibold ${
+                              plagiarismResult.is_ai_generated
+                                ? "text-red-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {plagiarismResult.is_ai_generated ? "Yes" : "No"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Shield className="w-5 h-5 text-blue-600" />
+                        <h4 className="font-bold text-gray-800">
+                          Plagiarism Detection
+                        </h4>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Plagiarism:</span>
+                          <span className="font-semibold text-gray-800">
+                            {plagiarismResult.plagiarism_percent}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Unique:</span>
+                          <span className="font-semibold text-green-600">
+                            {plagiarismResult.unique_percent}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-600">Risk Level:</span>
+                          <span
+                            className={`font-semibold ${
+                              plagiarismResult.plagiarism_risk === "high"
+                                ? "text-red-600"
+                                : plagiarismResult.plagiarism_risk === "medium"
+                                ? "text-yellow-600"
+                                : "text-green-600"
+                            }`}
+                          >
+                            {plagiarismResult.plagiarism_risk.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {plagiarismResult.recommendations &&
+                      plagiarismResult.recommendations.length > 0 && (
+                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
+                          <h4 className="font-bold text-blue-900 mb-2">
+                            Recommendations
+                          </h4>
+                          <ul className="text-sm text-blue-700 space-y-1">
+                            {plagiarismResult.recommendations.map(
+                              (rec, idx) => (
+                                <li key={idx}>• {rec}</li>
+                              )
+                            )}
+                          </ul>
+                        </div>
+                      )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setPlagiarismResult(null)}
+                        className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                      >
+                        <RefreshCw size={16} />
+                        Check Again
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* NEW: Google Docs Modal */}
+      {showGoogleDocsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div
+              className="bg-gradient-to-r from-purple-50 via-purple-100 to-pink-50
+             text-gray-700 p-6 flex items-center justify-between 
+             rounded-xl shadow-sm hover:from-purple-100 hover:via-purple-200 hover:to-pink-100
+             transition-all duration-300"
+            >
+              <div className="flex items-center gap-3">
+                <CloudUpload className="w-6 h-6" />
+                <h2 className="text-xl font-bold">Google Docs Integration</h2>
+              </div>
+              <button
+                onClick={() => setShowGoogleDocsModal(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto max-h-[calc(80vh-88px)]">
+              {!isGoogleSignedIn ? (
+                <div className="text-center py-8">
+                  <Cloud className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-gray-800 mb-2">
+                    Sign in to Google
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    Connect your Google account to upload, sync, and manage your
+                    documents in Google Docs
+                  </p>
+                  <button
+                    onClick={handleGoogleSignIn}
+                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 mx-auto"
+                  >
+                    <LogIn size={18} />
+                    Sign in with Google
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-1 gap-4 mb-6">
+                    <button
+                      onClick={uploadToGoogleDocs}
+                      disabled={isUploading || !inputText.trim()}
+                      className="
+    w-full 
+    bg-gradient-to-r from-purple-200 via-purple-300 to-pink-200
+    text-gray-800
+    px-6 py-4 
+    rounded-xl 
+    font-semibold 
+    shadow-md 
+    hover:from-purple-300 hover:via-purple-400 hover:to-pink-300
+    transition-all duration-300 
+    flex items-center justify-center gap-3 
+    disabled:opacity-50 disabled:cursor-not-allowed
+  "
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader className="w-5 h-5 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload size={20} />
+                          Upload to Google Docs
+                        </>
+                      )}
+                    </button>
+
+                    {currentGoogleDocId && (
+                      <button
+                        onClick={syncToGoogleDoc}
+                        disabled={isSyncing}
+                        className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-4 rounded-xl font-semibold hover:from-blue-600 hover:to-indigo-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                      >
+                        {isSyncing ? (
                           <>
-                            <Wand2 size={20} />
-                            Check Grammar
+                            <Loader className="w-5 h-5 animate-spin" />
+                            Syncing...
                           </>
                         ) : (
                           <>
                             <RefreshCw size={20} />
-                            Rephrase Text
+                            Sync Current Document
                           </>
                         )}
-                      </>
+                      </button>
                     )}
-                  </button>
-                </div>
-
-                {/* Result Area */}
-                {polishedText && (
-                  <div className="mt-8 p-6 bg-gradient-to-br from-green-50 to-blue-50 rounded-2xl border-2 border-green-200">
-                    <div className="flex items-center justify-between mb-4">
-                      <label className="text-gray-700 font-semibold flex items-center gap-2">
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                        {activeTab === "grammar"
-                          ? "Corrected Text"
-                          : "Rephrased Text"}
-                      </label>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleCopy}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all flex items-center gap-2 text-sm"
-                        >
-                          <Copy size={16} />
-                          {copySuccess ? "Copied!" : "Copy"}
-                        </button>
-                        <button
-                          onClick={handleDownload}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all flex items-center gap-2 text-sm"
-                        >
-                          <Download size={16} />
-                          Download
-                        </button>
-                      </div>
-                    </div>
-                    <style>{`
-                      .grammar-correction {
-                        background-color: #86efac !important;
-                        padding: 2px 4px;
-                        border-radius: 4px;
-                        position: relative;
-                        cursor: help;
-                        display: inline;
-                      }
-                      .grammar-correction:hover::after {
-                        content: "was: " attr(data-original);
-                        position: absolute;
-                        bottom: 100%;
-                        left: 50%;
-                        transform: translateX(-50%);
-                        background: #1f2937;
-                        color: white;
-                        padding: 4px 8px;
-                        border-radius: 6px;
-                        font-size: 12px;
-                        white-space: nowrap;
-                        z-index: 10;
-                        margin-bottom: 4px;
-                      }
-                    `}</style>
-                    <div
-                      className="bg-white p-4 rounded-xl border border-green-300 text-gray-800"
-                      style={{ lineHeight: "1.8" }}
-                    >
-                      {isHTML ? (
-                        <>
-                          <div
-                            dangerouslySetInnerHTML={{ __html: polishedText }}
-                          />
-                          {correctionCount > 0 && (
-                            <div className="mt-4 text-green-700 font-medium">
-                              Applied {correctionCount} correction
-                              {correctionCount > 1 ? "s" : ""}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <div style={{ whiteSpace: "pre-wrap" }}>
-                          {polishedText}
-                        </div>
-                      )}
-                    </div>
                   </div>
-                )}
+
+                  {/* Recent Google Docs */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <FolderOpen size={16} />
+                      Your Google Docs
+                    </h3>
+
+                    {googleDocs.length === 0 ? (
+                      <div className="text-center py-8 bg-gray-50 rounded-lg">
+                        <p className="text-gray-500 text-sm">
+                          No Google Docs found. Upload your first document!
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {googleDocs.map((doc) => (
+                          <div
+                            key={doc.id}
+                            className={`p-4 rounded-lg border transition-all hover:border-blue-300 cursor-pointer ${
+                              currentGoogleDocId === doc.id
+                                ? "bg-blue-50 border-blue-300"
+                                : "bg-gray-50 border-gray-200"
+                            }`}
+                            onClick={() => loadFromGoogleDoc(doc.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium text-gray-900 truncate">
+                                  {doc.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Modified:{" "}
+                                  {new Date(
+                                    doc.modifiedTime
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(doc.webViewLink, "_blank");
+                                }}
+                                className="p-2 hover:bg-blue-100 rounded-lg transition"
+                              >
+                                <FolderOpen
+                                  size={16}
+                                  className="text-blue-600"
+                                />
+                              </button>
+                            </div>
+                            {currentGoogleDocId === doc.id && (
+                              <div className="mt-2 text-xs text-blue-600 flex items-center gap-1">
+                                <CheckCircle size={12} />
+                                Currently linked
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Global Styles */}
+      <style>{`
+        [contenteditable] h1 { font-size: 2em; font-weight: bold; margin: 0.67em 0; }
+        [contenteditable] h2 { font-size: 1.5em; font-weight: bold; margin: 0.75em 0; }
+        [contenteditable] h3 { font-size: 1.17em; font-weight: bold; margin: 0.83em 0; }
+        [contenteditable] blockquote { border-left: 4px solid #e5e7eb; padding-left: 16px; margin: 16px 0; color: #6b7280; font-style: italic; }
+        [contenteditable] ul, [contenteditable] ol { padding-left: 40px; margin: 16px 0; }
+        [contenteditable] li { margin: 8px 0; }
+        [contenteditable] a { color: #2563eb; text-decoration: underline; }
+        [contenteditable] hr { border: none; border-top: 2px solid #e5e7eb; margin: 24px 0; }
+        [contenteditable] table { border-collapse: collapse; width: 100%; margin: 16px 0; }
+        [contenteditable] table th { background-color: #f3f4f6; font-weight: 600; text-align: left; }
+        [contenteditable] table th, [contenteditable] table td { border: 1px solid #d1d5db; padding: 8px 12px; }
+        [contenteditable][data-placeholder]:empty:before { content: attr(data-placeholder); color: #9ca3af; cursor: text; }
+        [contenteditable] { -webkit-user-select: text; user-select: text; }
+
+        .grammar-error {
+          text-decoration: underline wavy red;
+          text-decoration-thickness: 2px;
+          cursor: pointer;
+          background-color: transparent;
+          border-radius: 3px;
+          padding: 0 2px;
+        }
+        .grammar-error:hover { background-color: rgba(239, 68, 68, 0.1); }
+        .highlight-correction { animation: highlight-pulse 2s ease-in-out; }
+        @keyframes highlight-pulse {
+          0%, 100% { background-color: transparent; }
+          50% { background-color: rgba(59, 130, 246, 0.2); }
+        }
+      `}</style>
+
+      {/* Table Modal */}
+      {showTableModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Table className="w-6 h-6" />
+                <h2 className="text-xl font-bold">Insert Table</h2>
+              </div>
+              <button
+                onClick={() => setShowTableModal(false)}
+                className="hover:bg-white/20 p-2 rounded-lg transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Number of Rows
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={tableRows}
+                  onChange={(e) => setTableRows(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  Number of Columns
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={tableCols}
+                  onChange={(e) => setTableCols(parseInt(e.target.value) || 1)}
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={insertTable}
+                  className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-all"
+                >
+                  Insert Table
+                </button>
+                <button
+                  onClick={() => setShowTableModal(false)}
+                  className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-all"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
-          </article>
+          </div>
         </div>
-      </div>
+      )}
     </main>
+  );
+}
+
+// Toolbar Button Component
+function ToolbarButton({ onClick, icon, title }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-700 hover:text-gray-900"
+    >
+      {icon}
+    </button>
   );
 }

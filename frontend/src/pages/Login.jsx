@@ -52,7 +52,7 @@ export default function Login() {
 
           // Redirect to homepage
           const redirectPath =
-            localStorage.getItem("redirect_after_login") || "/";
+            localStorage.getItem("redirect_after_login") || "/explore";
           localStorage.removeItem("redirect_after_login");
 
           window.location.href = redirectPath;
@@ -70,7 +70,7 @@ export default function Login() {
           window.history.replaceState({}, "", "/login");
 
           const redirectPath =
-            localStorage.getItem("redirect_after_login") || "/";
+            localStorage.getItem("redirect_after_login") || "/explore";
           localStorage.removeItem("redirect_after_login");
           window.location.href = redirectPath;
         })
@@ -78,7 +78,7 @@ export default function Login() {
           console.error("[Google Login] Error fetching user:", err);
 
           const redirectPath =
-            localStorage.getItem("redirect_after_login") || "/";
+            localStorage.getItem("redirect_after_login") || "/explore";
           localStorage.removeItem("redirect_after_login");
           window.location.href = redirectPath;
         });
@@ -102,19 +102,17 @@ export default function Login() {
 
         // Simplified logic based on backend data
         const hasAvatar = response.avatar_url?.trim() !== "";
-        const hasInterests = Array.isArray(response.interests) && response.interests.length > 0;
+        const hasInterests =
+          Array.isArray(response.interests) && response.interests.length > 0;
 
         // if backend provides is_new_user
         if (response.is_new_user || !hasAvatar || !hasInterests) {
           console.log("[Login] New or incomplete profile → /welcome");
           navigate("/welcome");
         } else {
-          console.log("[Login] Existing complete user → /");
-          navigate("/");
+          console.log("[Login] Existing complete user → /explore");
+          navigate("/explore");
         }
-
-
-
       } else {
         // Registration
         response = await register({
@@ -360,7 +358,7 @@ export default function Login() {
         {/* Guest Access */}
         <div className="mt-4 text-center">
           <button
-            onClick={() => navigate("/")}
+            onClick={() => navigate("/explore")}
             className="text-gray-500 hover:text-gray-700 text-sm"
           >
             Continue as guest

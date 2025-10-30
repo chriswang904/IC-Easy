@@ -1,15 +1,21 @@
-// src/components/topic/HeroBanner.jsx
-import React from 'react';
-import { Zap, BookOpen } from 'lucide-react';
+import React from "react";
+import { Zap, BookOpen } from "lucide-react";
 
 export default function HeroBanner() {
   return (
     <section className="relative h-64 rounded-3xl overflow-hidden mb-6 shadow-lg">
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-700" />
-      <div className="absolute inset-0 opacity-20">
-        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent"></div>
-      </div>
-      <div className="relative h-full flex flex-col justify-end p-6 bg-gradient-to-t from-black/60 to-transparent">
+      {/* Background Image */}
+      <img
+        src="/images/mainPage.jpg"
+        alt="Hero Background"
+        className="absolute inset-0 w-full h-full object-cover"
+      />
+
+      {/* Optional: Gradient Overlay for better text readability */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+
+      {/* Content */}
+      <div className="relative h-full flex flex-col justify-end p-6 z-10">
         <h1 className="text-4xl font-bold text-white mb-2">
           Discover Your Next Academic Journey
         </h1>
