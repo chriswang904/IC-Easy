@@ -67,9 +67,10 @@ function Sidebar() {
   const handleImageLoad = () => setImageError(false);
 
   const navigationItems = [
+    { icon: Globe, label: "Explore", path: "/explore" },
     { icon: Sparkles, label: "TextLab", path: "/aitool" },
     { icon: Archive, label: "Collections", path: "/collections" },
-    // { icon: Globe, label: "Explore", path: "/explore" },
+
     // { icon: Origami, label: "Polish", path: "/polish" },
   ];
 
