@@ -26,6 +26,12 @@ import {
   Minus,
   Quote,
   Sparkles,
+  MessageSquare,
+  Lightbulb,
+  FileText,
+  ListChecks,
+  Brain,
+  Zap,
   FileCheck,
   Search,
   Shield,
@@ -60,9 +66,11 @@ export default function EssayEditor() {
   const [isRephrasing, setIsRephrasing] = useState(false);
   const [rephrasedResult, setRephrasedResult] = useState("");
 
-  // Plagiarism check state
-  const [isCheckingPlagiarism, setIsCheckingPlagiarism] = useState(false);
-  const [plagiarismResult, setPlagiarismResult] = useState(null);
+  const [aiAssistantMode, setAiAssistantMode] = useState("research");
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [promptSession, setPromptSession] = useState(null);
 
   // Table modal state
   const [showTableModal, setShowTableModal] = useState(false);
@@ -231,6 +239,27 @@ export default function EssayEditor() {
     }
   }, [accessToken, gapiReady]);
 
+  // Initialize Prompt API session
+  // Initialize Prompt API session
+  useEffect(() => {
+    const initPromptAPI = async () => {
+      if ("LanguageModel" in window) {
+        try {
+          const availability = await window.LanguageModel.availability();
+          console.log("[Prompt API] Availability:", availability);
+
+          if (availability === "readily") {
+            // Model is ready to use
+            console.log("[Prompt API] Model is ready");
+          }
+        } catch (err) {
+          console.error("[Prompt API] Initialization error:", err);
+        }
+      }
+    };
+
+    initPromptAPI();
+  }, []);
   // Load Google Docs list
   const loadGoogleDocs = async () => {
     if (!gapiReady || !window.gapi?.client?.drive) {
@@ -459,9 +488,7 @@ export default function EssayEditor() {
       // endIndex
       const content = docResponse.result.body?.content || [];
       const endIndex =
-        content.length > 0
-          ? content[content.length - 1].endIndex - 1
-          : 1;
+        content.length > 0 ? content[content.length - 1].endIndex - 1 : 1;
 
       console.log("[Sync] Updating content... (chars:", plainText.length, ")");
 
@@ -899,49 +926,163 @@ export default function EssayEditor() {
     }, 100);
   };
 
-  const handlePlagiarismCheck = async () => {
-    const textToCheck = inputText.trim();
+  // Helper functions for AI Assistant
 
-    if (!textToCheck) {
-      setError("Please write some text to check for originality!");
+  const getSystemPrompt = (mode) => {
+    const prompts = {
+      research:
+        "You are a research assistant helping with academic writing. Provide factual, well-structured information with clear points.",
+      outline:
+        "You are an expert at creating document outlines. Generate clear, logical structures with main points and subpoints.",
+      brainstorm:
+        "You are a creative brainstorming partner. Generate diverse, interesting ideas and perspectives.",
+      expand:
+        "You are a writing assistant. Help expand ideas into full, well-written paragraphs with proper flow and detail.",
+      continue:
+        "You are a writing continuation assistant. Analyze the existing text and continue writing in the same style and tone.",
+    };
+    return prompts[mode] || prompts.research;
+  };
+
+  const buildPrompt = (mode, userPrompt, documentText, selectedText) => {
+    const prompts = {
+      research: `Research Task: ${userPrompt}\n\nProvide 5-7 key points with brief explanations. Focus on facts and useful information.`,
+      outline: `Create a detailed outline for: ${userPrompt}\n\nProvide a structured outline with main sections and subsections. Use clear hierarchy.`,
+      brainstorm: `Brainstorm ideas for: ${userPrompt}\n\nGenerate 8-10 diverse ideas or angles. Be creative and think from different perspectives.`,
+      expand: selectedText
+        ? `Expand this text into a full paragraph:\n\n"${selectedText}"\n\nRequirements: ${userPrompt}\n\nWrite a well-developed paragraph with proper flow.`
+        : `Write a paragraph about: ${userPrompt}\n\nCreate a well-structured, detailed paragraph.`,
+      continue: documentText
+        ? `Continue writing this document:\n\n${documentText.slice(
+            -500
+          )}\n\nContinue in the same style and tone. Write the next 2-3 paragraphs.`
+        : `Start writing about: ${userPrompt}\n\nWrite an engaging introduction (2-3 paragraphs).`,
+    };
+    return prompts[mode] || prompts.research;
+  };
+  // AI Assistant Functions
+  const handleAIAssist = async () => {
+    if (!aiPrompt.trim() && aiAssistantMode !== "continue") {
+      setError("Please enter a prompt!");
       setTimeout(() => setError(null), 3000);
       return;
     }
 
-    setIsCheckingPlagiarism(true);
-    setPlagiarismResult(null);
+    setIsAiThinking(true);
+    setAiResponse("");
     setError(null);
 
     try {
-      const blob = new Blob([textToCheck], { type: "text/plain" });
-      const file = new File([blob], "document.txt", { type: "text/plain" });
-
-      console.log("[Originality Check] Checking document...");
-      const result = await checkAIOnly(file, true);
-
-      console.log("[Originality Check] Result:", result);
-      setPlagiarismResult(result);
-    } catch (err) {
-      console.error("[Originality Check] Error:", err);
-      if (err.code === "ECONNABORTED" || err.message.includes("timeout")) {
-        setError(
-          "Analysis is taking longer than expected. The models are loading for the first time. Please try again - it will be faster next time!"
+      // Check if API exists
+      if (!window.LanguageModel) {
+        setAiResponse(
+          "⚠️ Prompt API not available. Please:\n1. Use Chrome 127+ (Dev or Canary recommended)\n2. Enable 'Prompt API for Gemini Nano' at chrome://flags\n3. Ensure 22GB free disk space\n4. Restart Chrome"
         );
-      } else {
-        const backendDetail = err.response?.data?.detail;
-        if (Array.isArray(backendDetail)) {
-          setError(backendDetail[0]?.msg || JSON.stringify(backendDetail));
-        } else if (typeof backendDetail === "object") {
-          setError(backendDetail?.msg || JSON.stringify(backendDetail));
-        } else {
-          setError(err.message || "An error occurred during originality check");
-        }
+        setIsAiThinking(false);
+        return;
       }
+
+      console.log("[AI Assistant] Checking availability...");
+      const availability = await window.LanguageModel.availability();
+      console.log("[AI Assistant] Availability:", availability);
+
+      if (availability === "no") {
+        setAiResponse(
+          "⚠️ Model not available. Requirements:\n• 22 GB free disk space\n• GPU with >4GB VRAM OR 16GB RAM + 4 CPU cores\n• Enable flag at chrome://flags/#prompt-api-for-gemini-nano"
+        );
+        setIsAiThinking(false);
+        return;
+      }
+
+      if (availability === "after-download") {
+        setAiResponse(
+          "⏳ Model needs to be downloaded (~22GB). Click 'Generate' again to start download.\n\nNote: Requires user interaction (click/tap) to begin."
+        );
+        setIsAiThinking(false);
+
+        // This will trigger download on next click
+        return;
+      }
+
+      // Create session with monitor for download progress
+      console.log("[AI Assistant] Creating session...");
+      const session = await window.LanguageModel.create({
+        systemPrompt: getSystemPrompt(aiAssistantMode),
+        monitor(m) {
+          m.addEventListener("downloadprogress", (e) => {
+            console.log(`Downloaded ${e.loaded * 100}%`);
+            setAiResponse(
+              `⏳ Downloading model... ${Math.round(e.loaded * 100)}%`
+            );
+          });
+        },
+      });
+
+      const fullPrompt = buildPrompt(
+        aiAssistantMode,
+        aiPrompt,
+        inputText,
+        selectedText
+      );
+      console.log("[AI Assistant] Sending prompt...");
+
+      // Stream response
+      const stream = session.promptStreaming(fullPrompt);
+
+      for await (const chunk of stream) {
+        setAiResponse((prev) => prev + chunk);
+      }
+
+      session.destroy();
+      console.log("[AI Assistant] Response complete");
+    } catch (err) {
+      console.error("[AI Assistant] Error:", err);
+
+      let errorMsg = `⚠️ Error: ${err.message}`;
+      if (err.name === "NotSupportedError") {
+        errorMsg +=
+          "\n\nThis might be due to:\n• Insufficient disk space\n• Hardware requirements not met\n• Model not downloaded";
+      }
+
+      setAiResponse(errorMsg);
     } finally {
-      setIsCheckingPlagiarism(false);
+      setIsAiThinking(false);
     }
   };
 
+  const handleInsertAIResponse = () => {
+    if (!aiResponse || aiResponse.includes("⚠️") || aiResponse.includes("⏳")) {
+      return;
+    }
+
+    isUpdatingRef.current = true;
+
+    if (selectedText && selectionRange) {
+      const newText =
+        inputText.substring(0, selectionRange.start) +
+        aiResponse +
+        inputText.substring(selectionRange.end);
+      setInputText(newText);
+      if (editorRef.current) {
+        editorRef.current.textContent = newText;
+      }
+    } else {
+      const newText = inputText + "\n\n" + aiResponse;
+      setInputText(newText);
+      if (editorRef.current) {
+        editorRef.current.textContent = newText;
+      }
+    }
+
+    setAiResponse("");
+    setAiPrompt("");
+    setSelectedText("");
+    setSelectionRange(null);
+
+    setTimeout(() => {
+      isUpdatingRef.current = false;
+    }, 100);
+  };
   // Formatting functions
   const execCommand = (command, value = null) => {
     document.execCommand(command, false, value);
@@ -1293,15 +1434,15 @@ export default function EssayEditor() {
             Rewrite
           </button>
           <button
-            onClick={() => setActiveTab("plagiarism")}
+            onClick={() => setActiveTab("assistant")}
             className={`flex-1 px-4 py-3 text-sm font-semibold transition-all flex items-center justify-center gap-2 ${
-              activeTab === "plagiarism"
+              activeTab === "assistant"
                 ? "text-purple-600 border-b-2 border-purple-600 bg-purple-50"
                 : "text-gray-600 hover:bg-gray-50"
             }`}
           >
-            <Search size={16} />
-            Originality
+            <Brain size={16} />
+            Assistant
           </button>
         </div>
 
@@ -1519,191 +1660,191 @@ export default function EssayEditor() {
           )}
 
           {/* Originality/Plagiarism Tab */}
-          {activeTab === "plagiarism" && (
+
+          {/* AI Assistant Tab */}
+          {activeTab === "assistant" && (
             <div className="p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Search className="w-5 h-5 text-blue-500" />
+                <Brain className="w-5 h-5 text-blue-500" />
                 <h3 className="font-bold text-gray-800 text-lg">
-                  Originality Check
+                  AI Writing Assistant
                 </h3>
               </div>
 
-              {!plagiarismResult ? (
-                <>
-                  <div className="w-full bg-white/60 backdrop-blur-md border border-gray-200 rounded-xl px-6 py-4 shadow-sm hover:bg-white/70 transition-all duration-300 mb-6">
-                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <Shield className="w-5 h-5 text-purple-500" />
-                      What we check
-                    </h4>
-
-                    <ul className="text-sm text-gray-500 space-y-1 pl-1">
-                      <li>Content accuracy</li>
-                      <li>Grammar and tone</li>
-                      <li>Readability and clarity</li>
-                    </ul>
-                  </div>
-
+              {/* Mode Selection */}
+              <div className="mb-6">
+                <label className="block text-gray-700 font-semibold mb-3 text-sm">
+                  What do you need help with?
+                </label>
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={handlePlagiarismCheck}
-                    disabled={isCheckingPlagiarism || !inputText.trim()}
-                    className="w-full bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 px-6 py-3 rounded-xl font-semibold shadow-sm hover:from-purple-200 hover:to-pink-200 focus:ring-2 focus:ring-purple-300 focus:outline-none transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+                    onClick={() => setAiAssistantMode("research")}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      aiAssistantMode === "research"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-300"
+                    }`}
                   >
-                    {isCheckingPlagiarism ? (
-                      <>
-                        <Loader className="w-5 h-5 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Search size={20} />
-                        Check Originality
-                      </>
-                    )}
+                    <Search className="w-5 h-5 mx-auto mb-1" />
+                    <div className="text-xs font-semibold">Research</div>
                   </button>
 
-                  {isCheckingPlagiarism && (
-                    <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                      <p className="text-blue-700 text-xs">
-                        🔄 This may take 30-60 seconds for first-time model
-                        loading...
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div className="space-y-4">
-                    <div
-                      className={`p-4 rounded-xl border-2 ${
-                        plagiarismResult.overall_risk === "high"
-                          ? "bg-red-50 border-red-300"
-                          : plagiarismResult.overall_risk === "medium"
-                          ? "bg-yellow-50 border-yellow-300"
-                          : "bg-green-50 border-green-300"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        {plagiarismResult.overall_risk === "high" ? (
-                          <AlertTriangle className="w-5 h-5 text-red-600" />
-                        ) : plagiarismResult.overall_risk === "medium" ? (
-                          <AlertCircle className="w-5 h-5 text-yellow-600" />
-                        ) : (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        )}
-                        <h4
-                          className={`font-bold ${
-                            plagiarismResult.overall_risk === "high"
-                              ? "text-red-800"
-                              : plagiarismResult.overall_risk === "medium"
-                              ? "text-yellow-800"
-                              : "text-green-800"
-                          }`}
-                        >
-                          Overall Risk:{" "}
-                          {plagiarismResult.overall_risk.toUpperCase()}
-                        </h4>
-                      </div>
-                    </div>
+                  <button
+                    onClick={() => setAiAssistantMode("outline")}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      aiAssistantMode === "outline"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-300"
+                    }`}
+                  >
+                    <ListChecks className="w-5 h-5 mx-auto mb-1" />
+                    <div className="text-xs font-semibold">Outline</div>
+                  </button>
 
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="w-5 h-5 text-purple-600" />
-                        <h4 className="font-bold text-gray-800">
-                          AI Content Detection
-                        </h4>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">AI Probability:</span>
-                          <span className="font-semibold text-gray-800">
-                            {plagiarismResult.ai_probability}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Confidence:</span>
-                          <span className="font-semibold text-gray-800">
-                            {plagiarismResult.ai_confidence}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">AI Generated:</span>
-                          <span
-                            className={`font-semibold ${
-                              plagiarismResult.is_ai_generated
-                                ? "text-red-600"
-                                : "text-green-600"
-                            }`}
-                          >
-                            {plagiarismResult.is_ai_generated ? "Yes" : "No"}
-                          </span>
-                        </div>
-                      </div>
+                  <button
+                    onClick={() => setAiAssistantMode("brainstorm")}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      aiAssistantMode === "brainstorm"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-300"
+                    }`}
+                  >
+                    <Lightbulb className="w-5 h-5 mx-auto mb-1" />
+                    <div className="text-xs font-semibold">Brainstorm</div>
+                  </button>
+
+                  <button
+                    onClick={() => setAiAssistantMode("expand")}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      aiAssistantMode === "expand"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-300"
+                    }`}
+                  >
+                    <FileText className="w-5 h-5 mx-auto mb-1" />
+                    <div className="text-xs font-semibold">Expand</div>
+                  </button>
+
+                  <button
+                    onClick={() => setAiAssistantMode("continue")}
+                    className={`p-3 rounded-lg border-2 transition-all col-span-2 ${
+                      aiAssistantMode === "continue"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-300"
+                    }`}
+                  >
+                    <Zap className="w-5 h-5 mx-auto mb-1" />
+                    <div className="text-xs font-semibold">
+                      Continue Writing
                     </div>
+                  </button>
+                </div>
+              </div>
 
-                    <div className="p-4 bg-gray-50 rounded-xl border border-gray-200">
-                      <div className="flex items-center gap-2 mb-3">
-                        <Shield className="w-5 h-5 text-blue-600" />
-                        <h4 className="font-bold text-gray-800">
-                          Plagiarism Detection
-                        </h4>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Plagiarism:</span>
-                          <span className="font-semibold text-gray-800">
-                            {plagiarismResult.plagiarism_percent}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Unique:</span>
-                          <span className="font-semibold text-green-600">
-                            {plagiarismResult.unique_percent}%
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-gray-600">Risk Level:</span>
-                          <span
-                            className={`font-semibold ${
-                              plagiarismResult.plagiarism_risk === "high"
-                                ? "text-red-600"
-                                : plagiarismResult.plagiarism_risk === "medium"
-                                ? "text-yellow-600"
-                                : "text-green-600"
-                            }`}
-                          >
-                            {plagiarismResult.plagiarism_risk.toUpperCase()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+              {/* Helper Text */}
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-xs text-gray-600">
+                  {aiAssistantMode === "research" &&
+                    "💡 Get key facts and information about your topic"}
+                  {aiAssistantMode === "outline" &&
+                    "📋 Generate a structured outline for your document"}
+                  {aiAssistantMode === "brainstorm" &&
+                    "🎨 Explore different ideas and perspectives"}
+                  {aiAssistantMode === "expand" &&
+                    "✍️ Turn your ideas into full paragraphs"}
+                  {aiAssistantMode === "continue" &&
+                    "⚡ AI will continue writing based on your document"}
+                </p>
+              </div>
 
-                    {plagiarismResult.recommendations &&
-                      plagiarismResult.recommendations.length > 0 && (
-                        <div className="p-4 bg-blue-50 rounded-xl border border-blue-200">
-                          <h4 className="font-bold text-blue-900 mb-2">
-                            Recommendations
-                          </h4>
-                          <ul className="text-sm text-blue-700 space-y-1">
-                            {plagiarismResult.recommendations.map(
-                              (rec, idx) => (
-                                <li key={idx}>• {rec}</li>
-                              )
-                            )}
-                          </ul>
-                        </div>
-                      )}
+              {/* Prompt Input */}
+              <div className="mb-4">
+                <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                  {aiAssistantMode === "continue"
+                    ? "Additional Instructions (optional)"
+                    : "Your Prompt"}
+                </label>
+                <textarea
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder={
+                    aiAssistantMode === "research"
+                      ? "e.g., 'Climate change effects on polar bears'"
+                      : aiAssistantMode === "outline"
+                      ? "e.g., 'Essay on renewable energy'"
+                      : aiAssistantMode === "brainstorm"
+                      ? "e.g., 'Ways to reduce plastic waste'"
+                      : aiAssistantMode === "expand"
+                      ? "e.g., 'Make it more formal and detailed'"
+                      : "e.g., 'Continue in an academic tone'"
+                  }
+                  disabled={isAiThinking}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none resize-none text-sm disabled:opacity-50"
+                  rows="4"
+                />
+                {selectedText && aiAssistantMode === "expand" && (
+                  <p className="text-xs text-blue-600 mt-2">
+                    ✓ Will expand selected text: "
+                    {selectedText.substring(0, 50)}..."
+                  </p>
+                )}
+              </div>
 
+              {/* Generate Button */}
+              <button
+                onClick={handleAIAssist}
+                disabled={
+                  isAiThinking ||
+                  (aiAssistantMode !== "continue" && !aiPrompt.trim())
+                }
+                className="w-full bg-gradient-to-r from-purple-100 to-pink-100 text-gray-800 px-6 py-3 rounded-xl font-semibold shadow-sm hover:from-purple-200 hover:to-pink-200 focus:ring-2 focus:ring-purple-300 focus:outline-none transition-all duration-300 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mb-4"
+              >
+                {isAiThinking ? (
+                  <>
+                    <Loader className="w-5 h-5 animate-spin" />
+                    Thinking...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={20} />
+                    Generate
+                  </>
+                )}
+              </button>
+
+              {/* AI Response */}
+              {aiResponse && (
+                <div>
+                  <label className="block text-gray-700 font-semibold mb-2 text-sm">
+                    AI Response
+                  </label>
+                  <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200 min-h-32 mb-4 max-h-96 overflow-y-auto">
+                    <p className="text-gray-800 text-sm whitespace-pre-wrap">
+                      {aiResponse}
+                    </p>
+                  </div>
+
+                  {!aiResponse.includes("⚠️") && !aiResponse.includes("⏳") && (
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setPlagiarismResult(null)}
-                        className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-all font-semibold text-sm flex items-center justify-center gap-2"
+                        onClick={handleInsertAIResponse}
+                        className="flex-1 bg-blue-600 text-white px-4 py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
                       >
-                        <RefreshCw size={16} />
-                        Check Again
+                        <CheckCheck size={16} />
+                        {selectedText ? "Replace" : "Insert"}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAiResponse("");
+                          setAiPrompt("");
+                        }}
+                        className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-all"
+                      >
+                        Clear
                       </button>
                     </div>
-                  </div>
-                </>
+                  )}
+                </div>
               )}
             </div>
           )}
