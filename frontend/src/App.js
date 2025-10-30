@@ -13,6 +13,7 @@ import SummarizeResultPage from "./pages/SummarizeResultPage";
 import PolishPage from "./pages/PolishPage";
 import Welcome from "./pages/Welcome";
 import Profile from "./pages/Profile";
+import SearchResultPage from "./pages/SearchResultPage"
 
 function App() {
   return (
@@ -21,7 +22,7 @@ function App() {
         {/* No Sidebar Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/welcome" element={<Welcome />} />
-        <Route path="/" element={<Home />} /> {/* 👈 Home without Sidebar */}
+        <Route path="/" element={<Home />} /> {/* Home without Sidebar */}
         {/* Routes WITH Sidebar */}
         <Route
           path="/*"
@@ -34,16 +35,11 @@ function App() {
                   <Route path="/essay/:id" element={<EssayEditor />} />
                   <Route path="/collections" element={<CollectionsPage />} />
                   <Route path="/aitool" element={<AIToolPage />} />
-                  <Route
-                    path="/plagiarism-result"
-                    element={<PlagiarismResultPage />}
-                  />
+                  <Route path="/search-results" element={<SearchResultPage />} />
+                  <Route path="/plagiarism-result" element={<PlagiarismResultPage />}/>
                   <Route path="/recent" element={<RecentPage />} />
                   <Route path="/history" element={<History />} />
-                  <Route
-                    path="/summarize-result"
-                    element={<SummarizeResultPage />}
-                  />
+                  <Route path="/summarize-result" element={<SummarizeResultPage />} />
                   <Route path="/polish" element={<PolishPage />} />
                   <Route path="/profile" element={<Profile />} />
                 </Routes>

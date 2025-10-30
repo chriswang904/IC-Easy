@@ -17,9 +17,9 @@ export default function PaperList({ papers, onPaperClick }) {
 
   return (
     <section className="space-y-4 mt-8">
-      {papers.map((paper) => (
+      {papers.map((paper, index) => (
         <PaperCard
-          key={paper.id}
+          key={paper.id || paper.doi || paper.url || paper.title || index}
           paper={paper}
           onClick={onPaperClick}
         />

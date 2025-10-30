@@ -12,7 +12,7 @@ export function useSearch(topicImages) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchPerformed, setSearchPerformed] = useState(false);
-  const [searchHistory, setSearchHistory] = useState([]);
+  
   const [showSearchHistory, setShowSearchHistory] = useState(false);
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [totalResults, setTotalResults] = useState(0);
@@ -160,6 +160,16 @@ export function useSearch(topicImages) {
     resetAdvancedFilters();
   };
 
+  const [searchHistory, setSearchHistory] = useState(() => {
+    const saved = localStorage.getItem('searchHistory');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+
+  useEffect(() => {
+    localStorage.setItem('searchHistory', JSON.stringify(searchHistory));
+  }, [searchHistory]);
+  
   return {
     searchQuery,
     setSearchQuery,

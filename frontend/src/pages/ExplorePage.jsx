@@ -1,30 +1,29 @@
 // src/pages/Homepage.jsx
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
 import SearchBar from "../components/search/SearchBar";
-import SearchFilters from "../components/search/SearchFilters";
 import TopicSelector from "../components/topic/TopicSelector";
 import HeroBanner from "../components/topic/HeroBanner";
 import PaperList from "../components/paper/PaperList";
-import PaperPagination from "../components/paper/PaperPagination";
 import ErrorMessage from "../components/common/ErrorMessage";
 import LoadingSpinner from "../components/common/LoadingSpinner";
 
 import { useTopicImages } from "../hooks/useTopicImages";
 import { useSearch } from "../hooks/useSearch";
 import { useTopicPapers } from "../hooks/useTopicPapers";
-import { usePagination } from "../hooks/usePagination";
 
 import { DEFAULT_PAPERS } from "../constants/topics";
 import { getPersonalizedRecommendations } from "../api/recommendations";
-import { getStoredUser } from "../api/auth";
 import { Sparkles } from "lucide-react";
 
 export default function ExplorePage() {
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [personalized, setPersonalized] = useState(false);
+  const [shouldNavigate, setShouldNavigate] = useState(false); // ✅ 添加导航标记
 
   const { topicImages, loading: imagesLoading } = useTopicImages();
 
@@ -39,7 +38,6 @@ export default function ExplorePage() {
     papers,
     loading,
     error,
-    searchPerformed,
     searchHistory,
     showSearchHistory,
     setShowSearchHistory,
@@ -47,7 +45,7 @@ export default function ExplorePage() {
     setShowAdvancedSearch,
     advancedFilters,
     setAdvancedFilters,
-    handleSearch,
+    handleSearch: originalHandleSearch,
     resetAdvancedFilters,
     hasActiveFilters,
     totalResults,
@@ -63,8 +61,30 @@ export default function ExplorePage() {
     loadingTopic,
   } = useTopicPapers(topicImages);
 
-  const { currentPage, totalPages, currentItems, handlePageChange } =
-    usePagination(papers, 10);
+
+  const handleSearch = async () => {
+    setShouldNavigate(true);
+    await originalHandleSearch();
+  };
+
+  useEffect(() => {
+    console.log("[ExplorePage] papers before navigate:", papers);
+    console.log("[ExplorePage] loading:", loading);
+
+    if (shouldNavigate && Array.isArray(papers) && papers.length > 0 && !loading) {
+      console.log("[ExplorePage] Navigating to search results with papers:", papers.length);
+      navigate(`/search-results?query=${encodeURIComponent(searchQuery)}`, {
+        state: {
+          papers,
+          totalResults,
+          sortBy,
+          source,
+          searchQuery,
+        },
+      });
+      setShouldNavigate(false);
+    }
+  }, [shouldNavigate, papers, loading, navigate, totalResults, sortBy, source, searchQuery]);
 
   // Function to load user data from localStorage
   const loadUserData = () => {
@@ -107,7 +127,6 @@ export default function ExplorePage() {
   const loadRecommendations = async () => {
     setLoadingRecommendations(true);
     try {
-      // Get the latest user data before making the API call
       const currentUser = JSON.parse(localStorage.getItem("user"));
       console.log(
         "[Homepage] Loading recommendations for user interests:",
@@ -131,6 +150,7 @@ export default function ExplorePage() {
     }
   };
 
+  // Profile update listener
   useEffect(() => {
     const handleProfileUpdate = (event) => {
       console.log("[Homepage] Detected profile-updated event, refreshing...");
@@ -142,28 +162,19 @@ export default function ExplorePage() {
       window.removeEventListener("profile-updated", handleProfileUpdate);
   }, []);
 
-  // Initial load on mount + reload on navigation back
+  // Initial load on mount
   useEffect(() => {
     console.log("[Homepage] Component mounted/re-mounted");
-    console.log(
-      "[Homepage] Current localStorage user:",
-      localStorage.getItem("user")
-    );
-    console.log(
-      "[Homepage] Profile update time:",
-      localStorage.getItem("profile_update_time")
-    );
     loadUserData();
     loadRecommendations();
-  }, []); // This runs every time Homepage mounts
+  }, []);
 
-  // Also check for updates when window regains focus (user returns to tab)
+  // Check for updates when window regains focus
   useEffect(() => {
     const handleFocus = () => {
       console.log("[Homepage] Window focused, checking for profile updates...");
       const currentUser = JSON.parse(localStorage.getItem("user"));
 
-      // Check if user data changed by comparing interests
       if (
         JSON.stringify(currentUser?.interests) !==
         JSON.stringify(user?.interests)
@@ -178,17 +189,8 @@ export default function ExplorePage() {
     return () => window.removeEventListener("focus", handleFocus);
   }, [user]);
 
-  // Listen for profile updates (works when Homepage is mounted)
+  // Check for profile updates on mount
   useEffect(() => {
-    const handleProfileUpdate = (event) => {
-      console.log(
-        "[Homepage] Profile updated event received, refreshing data..."
-      );
-      loadUserData();
-      loadRecommendations();
-    };
-
-    // Also check on mount if profile was updated while we were away
     const checkForProfileChanges = () => {
       const storedUser = JSON.parse(localStorage.getItem("user"));
       const profileUpdateTime = localStorage.getItem("profile_update_time");
@@ -205,24 +207,17 @@ export default function ExplorePage() {
         loadRecommendations();
       }
 
-      // Update last check time
       sessionStorage.setItem("homepage_last_check", Date.now().toString());
     };
 
     checkForProfileChanges();
-    window.addEventListener("profile-updated", handleProfileUpdate);
-
-    return () => {
-      window.removeEventListener("profile-updated", handleProfileUpdate);
-    };
   }, []);
 
-  // Listen for reset search event AND check for profile updates
+  // Listen for reset search event
   useEffect(() => {
     const handleResetSearch = () => {
       console.log("[Homepage] Logo clicked - resetting to initial page");
 
-      // Check if profile was updated since last check
       const profileUpdateTime = localStorage.getItem("profile_update_time");
       const lastCheckTime = sessionStorage.getItem("homepage_last_check");
 
@@ -246,13 +241,13 @@ export default function ExplorePage() {
     };
   }, [resetSearch]);
 
-  const displayPapers = searchPerformed
-    ? currentItems
-    : topicPapers.length > 0
-    ? topicPapers
-    : recommendations.length > 0
-    ? recommendations
-    : DEFAULT_PAPERS;
+  // Determine which papers to display (no search results here anymore)
+  const displayPapers =
+    topicPapers.length > 0
+      ? topicPapers
+      : recommendations.length > 0
+      ? recommendations
+      : DEFAULT_PAPERS;
 
   const handlePaperClick = (paper) => {
     console.log("[Homepage] Paper clicked:", paper);
@@ -267,6 +262,7 @@ export default function ExplorePage() {
         <Sidebar />
         <div className="flex-1 flex justify-center items-start p-6">
           <article className="bg-white rounded-t-3xl shadow-xl p-6 w-[90%] max-w-6xl min-h-screen">
+            {/* Search Bar - for initiating searches */}
             <SearchBar
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
@@ -284,20 +280,11 @@ export default function ExplorePage() {
               hasActiveFilters={hasActiveFilters}
             />
 
-            {searchPerformed && (
-              <SearchFilters
-                sortBy={sortBy}
-                setSortBy={setSortBy}
-                source={source}
-                setSource={setSource}
-              />
-            )}
-
+            {/* Error Message */}
             <ErrorMessage message={error} />
 
-            {!searchPerformed &&
-              !selectedTopic &&
-              personalized &&
+            {/* Personalized Recommendations Banner */}
+            {personalized &&
               user?.interests &&
               Array.isArray(user.interests) &&
               user.interests.length > 0 &&
@@ -322,9 +309,8 @@ export default function ExplorePage() {
                 </div>
               )}
 
-            {!searchPerformed &&
-              !selectedTopic &&
-              user &&
+            {/* Tip for users without interests */}
+            {user &&
               (!user.interests || user.interests.length === 0) && (
                 <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6">
                   <p className="text-yellow-800">
@@ -339,9 +325,10 @@ export default function ExplorePage() {
                   </p>
                 </div>
               )}
+            {/* Hero Banner */}
+            <HeroBanner />
 
-            {!searchPerformed && <HeroBanner />}
-
+            {/* Loading Spinner */}
             {(loading || loadingRecommendations) && (
               <LoadingSpinner
                 message={
@@ -352,7 +339,8 @@ export default function ExplorePage() {
               />
             )}
 
-            {!searchPerformed && !loading && !loadingRecommendations && (
+            {/* Topic Selector */}
+            {!loading && !loadingRecommendations && (
               <TopicSelector
                 selectedTopic={selectedTopic}
                 setSelectedTopic={setSelectedTopic}
@@ -361,22 +349,12 @@ export default function ExplorePage() {
               />
             )}
 
+            {/* Paper List - Only shows recommendations/topic papers, NOT search results */}
             {!loading && !loadingRecommendations && (
-              <>
-                <PaperList
-                  papers={displayPapers}
-                  onPaperClick={handlePaperClick}
-                />
-                {searchPerformed && papers.length > 0 && (
-                  <PaperPagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    totalResults={totalResults}
-                    currentItems={currentItems}
-                    onPageChange={handlePageChange}
-                  />
-                )}
-              </>
+              <PaperList
+                papers={displayPapers}
+                onPaperClick={handlePaperClick}
+              />
             )}
           </article>
         </div>
