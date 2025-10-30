@@ -189,7 +189,7 @@ export default function Login() {
             )}
           </div>
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            {isLogin ? "Welcome Back" : "Create Account"}
+            {isLogin ? "Welcome" : "Create Account"}
           </h1>
           <p className="text-gray-600">
             {isLogin ? "Login to access your research" : "Join IC-Easy today"}
