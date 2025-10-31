@@ -8,6 +8,8 @@ import HeroBanner from "../components/topic/HeroBanner";
 import PaperList from "../components/paper/PaperList";
 import ErrorMessage from "../components/common/ErrorMessage";
 import LoadingSpinner from "../components/common/LoadingSpinner";
+import SelectCollectionDialog from "../components/collections/SelectCollectionDialog";
+import { useCollections } from "../hooks/useCollections";
 
 import { useTopicImages } from "../hooks/useTopicImages";
 import { useSearch } from "../hooks/useSearch";
@@ -23,9 +25,19 @@ export default function ExplorePage() {
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [personalized, setPersonalized] = useState(false);
-  const [shouldNavigate, setShouldNavigate] = useState(false); // ✅ 添加导航标记
+  const [shouldNavigate, setShouldNavigate] = useState(false); 
 
   const { topicImages, loading: imagesLoading } = useTopicImages();
+
+  const { addToCollection } = useCollections();
+  const [showDialog, setShowDialog] = useState(false);
+  const [selectedPaper, setSelectedPaper] = useState(null);
+
+  const handleAddToCollection = (paper) => {
+    setSelectedPaper(paper);
+    setShowDialog(true);
+  };
+
 
   const {
     searchQuery,
@@ -125,6 +137,17 @@ export default function ExplorePage() {
 
   // Function to load recommendations
   const loadRecommendations = async () => {
+
+    const cached = localStorage.getItem("cached_recommendations");
+    if (cached) {
+      const { data, timestamp } = JSON.parse(cached);
+      if (Date.now() - timestamp < 3600000) {
+        setRecommendations(data.results);
+        setPersonalized(data.personalized);
+        console.log("[Homepage] Using cached recommendations");
+      }
+    }
+    
     setLoadingRecommendations(true);
     try {
       const currentUser = JSON.parse(localStorage.getItem("user"));
@@ -136,6 +159,12 @@ export default function ExplorePage() {
       const data = await getPersonalizedRecommendations(15);
       setRecommendations(data.results);
       setPersonalized(data.personalized);
+
+      localStorage.setItem("cached_recommendations", JSON.stringify({
+        data,
+        timestamp: Date.now()
+      }));
+
       console.log("[Homepage] Recommendations loaded:", {
         total: data.total,
         personalized: data.personalized,
@@ -310,7 +339,7 @@ export default function ExplorePage() {
               )}
 
             {/* Tip for users without interests */}
-            {user &&
+            {/* {user &&
               (!user.interests || user.interests.length === 0) && (
                 <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-4 mb-6">
                   <p className="text-yellow-800">
@@ -324,7 +353,7 @@ export default function ExplorePage() {
                     to get personalized recommendations!
                   </p>
                 </div>
-              )}
+              )} */}
             {/* Hero Banner */}
             <HeroBanner />
 
@@ -356,6 +385,16 @@ export default function ExplorePage() {
                 onPaperClick={handlePaperClick}
               />
             )}
+
+            <SelectCollectionDialog
+              isOpen={showDialog}
+              onClose={() => setShowDialog(false)}
+              onConfirm={(subjectId, groupId) => {
+                addToCollection(selectedPaper, subjectId, groupId);
+                setShowDialog(false);
+              }}
+            />
+
           </article>
         </div>
       </div>

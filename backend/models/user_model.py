@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text
 from datetime import datetime
 from database import Base
+from sqlalchemy.orm import relationship
 import json
 
 
@@ -24,6 +25,8 @@ class User(Base):
     avatar_url = Column(String, nullable=True)  # DiceBear Avatar
     interests = Column(Text, nullable=True)  # ← Changed from JSON to Text
     
+    collections = relationship("Collection", back_populates="user")
+
     # Helper methods for interests (optional but useful)
     def get_interests(self):
         """Get interests as a Python list"""

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { FileText, BookOpen, PenSquare } from "lucide-react";
 import Sidebar from "../components/Sidebar";
-import MenuSection from "../components/MenuSection";
+import MenuSection from "../components/collections/MenuSection";
 
 function RecentPage() {
   const [activeTab, setActiveTab] = useState("all");

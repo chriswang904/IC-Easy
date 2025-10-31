@@ -10,6 +10,8 @@ import LoadingSpinner from "../components/common/LoadingSpinner";
 import { usePagination } from "../hooks/usePagination";
 import { useTopicImages } from "../hooks/useTopicImages";
 import { useSearch } from "../hooks/useSearch";
+import SelectCollectionDialog from "../components/collections/SelectCollectionDialog";
+import { useCollections } from "../hooks/useCollections";
 
 export default function SearchResultPage() {
   const location = useLocation();
@@ -24,6 +26,10 @@ export default function SearchResultPage() {
     source: initialSource,
     searchQuery: initialSearchQuery,
   } = location.state || {};
+
+  const { addToCollection } = useCollections();
+  const [showDialog, setShowDialog] = useState(false);
+  const [selectedPaper, setSelectedPaper] = useState(null);
 
   // Use the useSearch hook to manage all search-related states and functions
   const {
@@ -208,6 +214,15 @@ export default function SearchResultPage() {
                 </button>
               </div>
             ) : null}
+
+            <SelectCollectionDialog
+              isOpen={showDialog}
+              onClose={() => setShowDialog(false)}
+              onConfirm={(subjectId, groupId) => {
+                addToCollection(selectedPaper, subjectId, groupId);
+                setShowDialog(false);
+              }}
+            />
           </article>
         </div>
       </div>

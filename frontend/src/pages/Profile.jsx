@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { LogOut, RefreshCcw, Save, Check, Edit2 } from "lucide-react";
 import { updateUserProfile } from "../api/user";
+import { useNavigate } from "react-router-dom";
 
 export default function Profile() {
   const [user, setUser] = useState(null);
@@ -9,6 +10,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingUsername, setEditingUsername] = useState(false);
+  const navigate = useNavigate();
 
   const availableInterests = [
     { id: "AI", label: "Artificial Intelligence", emoji: "🤖" },
@@ -79,7 +81,7 @@ export default function Profile() {
       setEditingUsername(false);
       setUser(updated);
       setTimeout(() => {
-        window.location.href = "/";
+        navigate("/explore");
       }, 400);
     } catch (err) {
       console.error("Update failed:", err);

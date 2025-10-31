@@ -7,6 +7,10 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+def get_database_url():
+    """Get database URL from environment or use default SQLite"""
+    return os.getenv("DATABASE_URL", "sqlite:///./ic_easy.db")
+
 # Get database URL from environment
 SQLALCHEMY_DATABASE_URL = os.getenv(
     "DATABASE_URL", 

@@ -5,8 +5,6 @@ Chrome AI Challenge Backend API - Main Application Entry Point
 This module initializes the FastAPI application, configures middleware,
 registers routes, and sets up logging for the backend service.
 
-Author: Chrome AI Challenge Team
-Version: 1.0.0
 """
 
 from fastapi import FastAPI, Request
@@ -21,6 +19,7 @@ from dotenv import load_dotenv
 from database import engine, Base
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
+from api import collections
 
 # Load environment variables from .env file
 load_dotenv()
@@ -47,7 +46,6 @@ app = FastAPI(
     title="Chrome AI Challenge Backend API",
     description=(
         "Backend API service for literature search, reference formatting, and plagiarism detection. "
-        "Supports multiple data sources (CrossRef, arXiv, OpenAlex) and citation formats (APA, IEEE, MLA)."
     ),
     version="1.0.0",
     docs_url="/docs",           # Swagger UI documentation
@@ -55,11 +53,9 @@ app = FastAPI(
     openapi_url="/openapi.json" # OpenAPI schema
 )
 
-logger.info("[Route Registration] Registering recommendations routes...")
-app.include_router(recommendations.router)
-
-# Create DB tables
-Base.metadata.create_all(bind=engine)
+@app.options("/api/collections/")
+async def collections_options():
+    return {"message": "OK"}
 
 # CORS MIDDLEWARE CONFIGURATION
 
@@ -80,6 +76,10 @@ app.add_middleware(
     max_age=3600,                    # Cache preflight requests for 1 hour
 )
 
+
+
+# Create DB tables
+Base.metadata.create_all(bind=engine)
 
 # GLOBAL EXCEPTION HANDLER
 
@@ -239,9 +239,10 @@ app.include_router(plagiarism.router)
 logger.info("[Route Registration] Registering history routes...")
 app.include_router(history.router)
 
+
+app.include_router(recommendations.router)
+app.include_router(collections.router)
 logger.info("[Route Registration] All routes registered successfully")
-
-
 # ROOT ENDPOINTS
 
 

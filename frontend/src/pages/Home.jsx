@@ -323,7 +323,7 @@ export default function Home() {
           </svg>
         </div>
 
-        <style jsx>{`
+        <style>{`
           @keyframes float {
             0%,
             100% {
@@ -448,7 +448,7 @@ export default function Home() {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes scroll {
           0% {
             transform: translateX(0);
