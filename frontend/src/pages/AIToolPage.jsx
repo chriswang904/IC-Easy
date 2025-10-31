@@ -357,7 +357,7 @@ export default function AIToolPage() {
   };
 
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200">
+    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen ">
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="flex-1 flex justify-center items-start p-6">

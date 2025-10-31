@@ -25,7 +25,7 @@ export default function ExplorePage() {
   const [recommendations, setRecommendations] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(false);
   const [personalized, setPersonalized] = useState(false);
-  const [shouldNavigate, setShouldNavigate] = useState(false); 
+  const [shouldNavigate, setShouldNavigate] = useState(false);
 
   const { topicImages, loading: imagesLoading } = useTopicImages();
 
@@ -37,7 +37,6 @@ export default function ExplorePage() {
     setSelectedPaper(paper);
     setShowDialog(true);
   };
-
 
   const {
     searchQuery,
@@ -73,7 +72,6 @@ export default function ExplorePage() {
     loadingTopic,
   } = useTopicPapers(topicImages);
 
-
   const handleSearch = async () => {
     setShouldNavigate(true);
     await originalHandleSearch();
@@ -83,8 +81,16 @@ export default function ExplorePage() {
     console.log("[ExplorePage] papers before navigate:", papers);
     console.log("[ExplorePage] loading:", loading);
 
-    if (shouldNavigate && Array.isArray(papers) && papers.length > 0 && !loading) {
-      console.log("[ExplorePage] Navigating to search results with papers:", papers.length);
+    if (
+      shouldNavigate &&
+      Array.isArray(papers) &&
+      papers.length > 0 &&
+      !loading
+    ) {
+      console.log(
+        "[ExplorePage] Navigating to search results with papers:",
+        papers.length
+      );
       navigate(`/search-results?query=${encodeURIComponent(searchQuery)}`, {
         state: {
           papers,
@@ -96,7 +102,16 @@ export default function ExplorePage() {
       });
       setShouldNavigate(false);
     }
-  }, [shouldNavigate, papers, loading, navigate, totalResults, sortBy, source, searchQuery]);
+  }, [
+    shouldNavigate,
+    papers,
+    loading,
+    navigate,
+    totalResults,
+    sortBy,
+    source,
+    searchQuery,
+  ]);
 
   // Function to load user data from localStorage
   const loadUserData = () => {
@@ -137,7 +152,6 @@ export default function ExplorePage() {
 
   // Function to load recommendations
   const loadRecommendations = async () => {
-
     const cached = localStorage.getItem("cached_recommendations");
     if (cached) {
       const { data, timestamp } = JSON.parse(cached);
@@ -147,7 +161,7 @@ export default function ExplorePage() {
         console.log("[Homepage] Using cached recommendations");
       }
     }
-    
+
     setLoadingRecommendations(true);
     try {
       const currentUser = JSON.parse(localStorage.getItem("user"));
@@ -160,10 +174,13 @@ export default function ExplorePage() {
       setRecommendations(data.results);
       setPersonalized(data.personalized);
 
-      localStorage.setItem("cached_recommendations", JSON.stringify({
-        data,
-        timestamp: Date.now()
-      }));
+      localStorage.setItem(
+        "cached_recommendations",
+        JSON.stringify({
+          data,
+          timestamp: Date.now(),
+        })
+      );
 
       console.log("[Homepage] Recommendations loaded:", {
         total: data.total,
@@ -286,7 +303,7 @@ export default function ExplorePage() {
   };
 
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
+    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen overflow-y-auto">
       <div className="flex min-h-screen">
         <Sidebar />
         <div className="flex-1 flex justify-center items-start p-6">
@@ -394,7 +411,6 @@ export default function ExplorePage() {
                 setShowDialog(false);
               }}
             />
-
           </article>
         </div>
       </div>

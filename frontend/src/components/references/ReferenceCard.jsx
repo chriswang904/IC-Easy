@@ -7,41 +7,44 @@ export default function ReferenceCard({ refData, format, onDelete }) {
   const [citation, setCitation] = useState("Formatting...");
 
   useEffect(() => {
+    console.log("=== REFERENCE CARD RENDERING ===");
+    console.log("Received refData:", refData);
+
     const fetchCitation = async () => {
-        try {
+      try {
         const formattedAuthors = (refData.authors || []).map((a) =>
-            typeof a === "string" ? { name: a } : a
+          typeof a === "string" ? { name: a } : a
         );
 
+        console.log("Formatted authors for API:", formattedAuthors);
+
         const literaturePayload = {
-            ...refData,
-            authors: formattedAuthors,
+          ...refData,
+          authors: formattedAuthors,
         };
 
-        console.log("[ReferenceCard] sending:", literaturePayload);
+        console.log("Sending to API:", literaturePayload);
 
         const res = await formatReference({
-            literature: literaturePayload,
-            format,
+          literature: literaturePayload,
+          format,
         });
 
-        console.log("[ReferenceCard] response:", res);
+        console.log("API response:", res);
 
         setCitation(
-            res.formatted_reference ||
+          res.formatted_reference ||
             res.formatted ||
             "[No formatted text returned]"
         );
-        } catch (err) {
-        console.error("[ReferenceCard] Formatting failed:", err);
+      } catch (err) {
+        console.error("Formatting failed:", err);
         setCitation("[Error formatting reference]");
-        }
+      }
     };
 
     fetchCitation();
-    }, [refData, format]);
-
-
+  }, [refData, format]);
 
   return (
     <li className="p-4 bg-gray-50 rounded-xl border hover:border-purple-300 transition flex justify-between items-start">

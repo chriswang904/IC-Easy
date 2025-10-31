@@ -20,8 +20,13 @@ function CollectionsPage() {
   const [isSelecting, setIsSelecting] = useState(false);
 
   // === Hooks ===
-  const { collections, loading, removeFromCollection, fetchCollections, batchDelete } =
-    useCollections();
+  const {
+    collections,
+    loading,
+    removeFromCollection,
+    fetchCollections,
+    batchDelete,
+  } = useCollections();
 
   // === Fetch collections on mount ===
   useEffect(() => {
@@ -88,29 +93,32 @@ function CollectionsPage() {
     console.log("activeSubjectId:", activeSubjectId);
     console.log("activeGroupId:", activeGroupId);
     console.log("allItems total:", allItems.length);
-    
+
     if (activeGroupId) {
       console.log("Filtering by group_id:", activeGroupId);
       const filtered = allItems.filter((item) => {
         const match = Number(item.group_id) === Number(activeGroupId);
-        console.log(`  ${item.title.substring(0, 25)} | group: ${item.group_id} | match: ${match}`);
+        console.log(
+          `  ${item.title.substring(0, 25)} | group: ${
+            item.group_id
+          } | match: ${match}`
+        );
         return match;
       });
       console.log("=== Final filtered:", filtered.length);
       return filtered;
     }
-    
+
     if (activeSubjectId === "all") {
       console.log("Showing all collections");
       return allItems;
     }
-    
+
     console.log("Filtering by subject_id:", activeSubjectId);
     return allItems.filter(
       (item) => Number(item.subject_id) === Number(activeSubjectId)
     );
   }, [activeSubjectId, activeGroupId, allItems]);
-
 
   // === Select / Delete logic ===
   const handleBatchDelete = async () => {
@@ -166,10 +174,8 @@ function CollectionsPage() {
         <div className="flex-1 flex flex-col">
           {/* Header */}
           <header className="bg-white border-b border-gray-200 px-6 py-4">
-            <div className="flex items-center justify-between px-4 py-8">
-              <h1 className="text-3xl font-bold text-gray-900 mb-0">
-                {activeName}
-              </h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-2xl font-bold text-gray-900">{activeName}</h1>
               <div className="flex items-center gap-2">
                 {!isSelecting ? (
                   <>
@@ -219,43 +225,45 @@ function CollectionsPage() {
 
           {/* Content */}
           <main className="flex-1 px-8 py-6 overflow-auto">
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
-              </div>
-            ) : filteredItems.length === 0 ? (
-              <div className="text-center py-12">
-                <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-lg">
-                  {activeSubjectId === "all"
-                    ? "No saved papers yet"
-                    : `No papers in "${activeName}"`}
-                </p>
-                <p className="text-gray-400 text-sm mt-2">
-                  Click the star icon on any paper to save it here
-                </p>
-              </div>
-            ) : (
-              <ul className="space-y-3">
-                {filteredItems.map((item) => (
-                  <CollectionCard
-                    key={item.id}
-                    item={item}
-                    onDelete={handleDelete}
-                    onClick={handlePaperClick}
-                    isSelecting={isSelecting}
-                    isSelected={selectedIds.includes(item.collectionId)}
-                    onSelect={(id) =>
-                      setSelectedIds((prev) =>
-                        prev.includes(id)
-                          ? prev.filter((i) => i !== id)
-                          : [...prev, id]
-                      )
-                    }
-                  />
-                ))}
-              </ul>
-            )}
+            <div className="max-w-4xl mx-auto">
+              {loading ? (
+                <div className="flex justify-center items-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600"></div>
+                </div>
+              ) : filteredItems.length === 0 ? (
+                <div className="text-center py-12">
+                  <BookOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 text-lg">
+                    {activeSubjectId === "all"
+                      ? "No saved papers yet"
+                      : `No papers in "${activeName}"`}
+                  </p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    Click the star icon on any paper to save it here
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {filteredItems.map((item) => (
+                    <CollectionCard
+                      key={item.id}
+                      item={item}
+                      onDelete={handleDelete}
+                      onClick={handlePaperClick}
+                      isSelecting={isSelecting}
+                      isSelected={selectedIds.includes(item.collectionId)}
+                      onSelect={(id) =>
+                        setSelectedIds((prev) =>
+                          prev.includes(id)
+                            ? prev.filter((i) => i !== id)
+                            : [...prev, id]
+                        )
+                      }
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
           </main>
         </div>
       </div>

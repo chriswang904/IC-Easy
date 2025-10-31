@@ -26,7 +26,9 @@ export const useCollections = () => {
     const stored = localStorage.getItem("collections");
     if (!stored) return false;
     const parsed = JSON.parse(stored);
-    return parsed.some((item) => item.paper_id === paperId || item.id === paperId);
+    return parsed.some(
+      (item) => item.paper_id === paperId || item.id === paperId
+    );
   };
 
   const addToCollection = (paper, subjectId, groupId) => {
@@ -41,39 +43,50 @@ export const useCollections = () => {
       `${paper.source}-${paper.title.substring(0, 50).replace(/\s/g, "-")}`;
 
     const existsInSameGroup = collections.some(
-      (c) => 
-        (c.paper_id === paperId || c.id === paperId) && 
+      (c) =>
+        (c.paper_id === paperId || c.id === paperId) &&
         Number(c.group_id) === Number(groupId)
     );
-    
+
     if (existsInSameGroup) {
       toast.info("This paper is already in this collection.");
       return;
     }
 
     const existsInOtherGroup = collections.find(
-      (c) => 
-        (c.paper_id === paperId || c.id === paperId) && 
+      (c) =>
+        (c.paper_id === paperId || c.id === paperId) &&
         Number(c.group_id) !== Number(groupId)
     );
-    
+
     if (existsInOtherGroup) {
       const subjects = JSON.parse(localStorage.getItem("subjects"));
       const otherGroupName = subjects
-        .flatMap(s => s.items)
-        .find(g => g.id === existsInOtherGroup.group_id)?.name;
-      
-      if (!window.confirm(`This paper already exists in "${otherGroupName}". Add to this collection too?`)) {
+        .flatMap((s) => s.items)
+        .find((g) => g.id === existsInOtherGroup.group_id)?.name;
+
+      if (
+        !window.confirm(
+          `This paper already exists in "${otherGroupName}". Add to this collection too?`
+        )
+      ) {
         return;
       }
     }
+
+    // Convert authors array to the expected format
+    const authorsFormatted = Array.isArray(paper.authors)
+      ? paper.authors.map((author) =>
+          typeof author === "string" ? { name: author } : author
+        )
+      : [];
 
     const newItem = {
       id: Date.now(),
       paper_id: paperId,
       title: paper.title,
       url: paper.url,
-      authors: paper.authors || [],
+      authors: authorsFormatted, // ← Changed this line
       abstract: paper.abstract || "",
       source: paper.source,
       date: new Date().toISOString(),
@@ -113,6 +126,6 @@ export const useCollections = () => {
     addToCollection,
     removeFromCollection,
     batchDelete,
-    checkCollected, 
+    checkCollected,
   };
 };

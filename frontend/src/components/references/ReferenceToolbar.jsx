@@ -1,12 +1,17 @@
 // frontend/src/components/references/ReferenceToolbar.jsx
 
 import React from "react";
-import { FileText, Download } from "lucide-react";
+import { Copy, FileDown } from "lucide-react";
 import FormatSelector from "./FormatSelector";
-import AddReferenceDialog from "./AddReferenceDialog"; 
+import AddReferenceDialog from "./AddReferenceDialog";
 import { exportBibtex, exportRis } from "../../api/references";
 
-export default function ReferenceToolbar({ format, setFormat, onAdd }) {
+export default function ReferenceToolbar({
+  format,
+  setFormat,
+  onAdd,
+  onCopyAll,
+}) {
   // Handle exporting of references to BibTeX or RIS files
   const handleExport = async (type) => {
     if (type === "bib") await exportBibtex();
@@ -14,30 +19,40 @@ export default function ReferenceToolbar({ format, setFormat, onAdd }) {
   };
 
   return (
-    <div className="flex items-center justify-between bg-gray-50 px-4 py-3 rounded-xl border">
-      {/* Left Section: format selector + export */}
-      <div className="flex items-center gap-3">
-        <FormatSelector value={format} onChange={setFormat} />
+    <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+      {/* Left Section: format selector */}
+      <FormatSelector value={format} onChange={setFormat} />
 
-        {/* Export .bib */}
+      {/* Right Section: actions */}
+      <div className="flex items-center gap-2">
+        {/* Export dropdown or buttons */}
+        <div className="flex items-center gap-1 border-r border-gray-200 pr-2">
+          <button
+            onClick={() => handleExport("bib")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            .bib
+          </button>
+          <button
+            onClick={() => handleExport("ris")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            <FileDown className="w-4 h-4" />
+            .ris
+          </button>
+        </div>
+
         <button
-          onClick={() => handleExport("bib")}
-          className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg flex items-center gap-1 hover:bg-purple-200 transition"
+          onClick={onCopyAll}
+          className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
         >
-          <FileText size={16} /> Export .bib
+          <Copy className="w-4 h-4" />
+          Copy all
         </button>
 
-        {/* Export .ris */}
-        <button
-          onClick={() => handleExport("ris")}
-          className="px-3 py-1 bg-green-100 text-green-700 rounded-lg flex items-center gap-1 hover:bg-green-200 transition"
-        >
-          <Download size={16} /> Export .ris
-        </button>
+        <AddReferenceDialog onAdd={onAdd} />
       </div>
-
-      {/* Right Section: new AddReferenceDialog */}
-      <AddReferenceDialog onAdd={onAdd} />
     </div>
   );
 }

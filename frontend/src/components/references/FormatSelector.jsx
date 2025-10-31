@@ -2,16 +2,27 @@
 import React from "react";
 
 export default function FormatSelector({ value, onChange }) {
+  const formats = [
+    { value: "apa", label: "APA" },
+    { value: "mla", label: "MLA" },
+    { value: "ieee", label: "IEEE" },
+  ];
+
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="border rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-purple-400"
-    >
-      <option value="apa">APA</option>
-      <option value="ieee">IEEE</option>
-      <option value="mla">MLA</option>
-      <option value="bibtex">BibTeX</option>
-    </select>
+    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+      {formats.map((f) => (
+        <button
+          key={f.value}
+          onClick={() => onChange(f.value)}
+          className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+            value === f.value
+              ? "bg-white text-gray-900 shadow-sm"
+              : "text-gray-600 hover:text-gray-900"
+          }`}
+        >
+          {f.label}
+        </button>
+      ))}
+    </div>
   );
 }

@@ -10,15 +10,9 @@ export function useReferences() {
     setReferences(collections);
   };
 
-  const addReference = () => {
-    const title = prompt("Enter title:");
-    if (!title) return;
-    const newRef = {
-      id: Date.now(),
-      title,
-      authors: [],
-      year: new Date().getFullYear(),
-    };
+  const addReference = (newRef) => {
+    // ACCEPT the parameter!
+    if (!newRef) return;
     setReferences((prev) => [...prev, newRef]);
   };
 
@@ -26,5 +20,12 @@ export function useReferences() {
     setReferences((prev) => prev.filter((r) => r.id !== id));
   };
 
-  return { references, format, setFormat, addReference, removeReference, loadFromCollections };
+  return {
+    references,
+    format,
+    setFormat,
+    addReference,
+    removeReference,
+    loadFromCollections,
+  };
 }

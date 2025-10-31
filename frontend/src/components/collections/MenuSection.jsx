@@ -47,7 +47,10 @@ function MenuSection({
 
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+      if (
+        contextMenuRef.current &&
+        !contextMenuRef.current.contains(e.target)
+      ) {
         setShowContextMenu(null);
       }
     };
@@ -65,7 +68,12 @@ function MenuSection({
 
   const addSubject = () => {
     const newId = Date.now();
-    const newSubject = { id: newId, name: "New Subject", expanded: true, items: [] };
+    const newSubject = {
+      id: newId,
+      name: "New Subject",
+      expanded: true,
+      items: [],
+    };
     setSubjects([...subjects, newSubject]);
     setEditingSubject(newId);
     setEditValue("New Subject");
@@ -76,7 +84,9 @@ function MenuSection({
     const newGroup = { id: newId, name: "New Group", type: "group", items: [] };
     setSubjects(
       subjects.map((s) =>
-        s.id === subjectId ? { ...s, expanded: true, items: [...s.items, newGroup] } : s
+        s.id === subjectId
+          ? { ...s, expanded: true, items: [...s.items, newGroup] }
+          : s
       )
     );
     setEditingItem(newId);
@@ -126,22 +136,33 @@ function MenuSection({
   };
 
   return (
-    <nav className="flex flex-col w-full h-full bg-white" role="navigation" aria-label="Collections">
+    <nav
+      className="flex flex-col w-full h-full bg-white"
+      role="navigation"
+      aria-label="Collections"
+    >
       <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-        <h3 className="text-sm font-semibold text-[#4a4459] uppercase">Subjects</h3>
-        <button onClick={addSubject} className="p-1.5 hover:bg-purple-100 rounded-lg">
+        <h3 className="text-sm font-semibold text-[#4a4459] uppercase">
+          Subjects
+        </h3>
+        <button
+          onClick={addSubject}
+          className="p-1.5 hover:bg-purple-100 rounded-lg"
+        >
           <Plus className="w-4 h-4 text-[#4a4459]" />
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-6 space-y-2">
         <li
-            className={`flex items-center justify-between px-3 py-2 rounded-md cursor-pointer text-sm ${
-                activeTopicId === "all" ? "bg-purple-100 text-purple-700 font-medium" : "hover:bg-gray-100"
-            }`}
-            onClick={() => onTopicChange("all", "All Files")}
+          className={`flex items-center justify-between px-3 py-2 mt-4 rounded-md cursor-pointer text-sm ${
+            activeTopicId === "all"
+              ? "bg-purple-100 text-purple-700 font-medium"
+              : "hover:bg-gray-100"
+          }`}
+          onClick={() => onTopicChange("all", "All Files")}
         >
-            📁 Show All Collections
+          Show All Collections
         </li>
         {subjects.map((subject) => (
           <div key={subject.id} className="mb-2">
@@ -193,7 +214,10 @@ function MenuSection({
             {subject.expanded && (
               <div className="ml-4 space-y-1 mt-1">
                 {subject.items.map((group) => (
-                  <div key={group.id} className="flex items-center justify-between group">
+                  <div
+                    key={group.id}
+                    className="flex items-center justify-between group"
+                  >
                     {editingItem === group.id ? (
                       <input
                         type="text"
