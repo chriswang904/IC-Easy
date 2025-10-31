@@ -4,7 +4,7 @@ import {
   Plus,
   ChevronRight,
   ChevronDown,
-  FolderPlus,
+  Folder,
   MoreVertical,
   Trash2,
   Edit2,
@@ -178,7 +178,7 @@ function MenuSection({
                   className="p-1 opacity-0 group-hover:opacity-100 hover:bg-purple-100 rounded transition"
                   title="Add Group"
                 >
-                  <FolderPlus className="w-4 h-4 text-gray-600" />
+                  <Folder className="w-4 h-4 text-gray-600" />
                 </button>
                 <button
                   onClick={() => handleDeleteSubject(subject.id)}
@@ -216,7 +216,7 @@ function MenuSection({
                             : "text-gray-700"
                         }`}
                       >
-                        <FolderPlus className="w-4 h-4 text-gray-500" />
+                        <Folder className="w-4 h-4 text-gray-500" />
                         <span>{group.name}</span>
                       </button>
                     )}
