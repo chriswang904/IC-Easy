@@ -10,7 +10,7 @@ registers routes, and sets up logging for the backend service.
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from api import literature, plagiarism, history, auth, recommendations, knowledge
+from api import literature, plagiarism, history, auth, recommendations  
 import os
 import logging
 import sys
@@ -70,7 +70,7 @@ logger.info(f"[CORS] Allowed origins: {origins}")
 # This allows frontend applications to make requests to the backend API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],             # Allow all origins for deployment (change after frontend is deployed)
+    allow_origins=["*"],             # Allow all origins for now (change after frontend deployment)
     allow_credentials=True,          # Allow cookies and authentication
     allow_methods=["*"],             # Allow all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],             # Allow all headers
@@ -244,9 +244,6 @@ app.include_router(history.router)
 
 app.include_router(recommendations.router)
 app.include_router(collections.router)
-
-app.include_router(knowledge.router)
-
 logger.info("[Route Registration] All routes registered successfully")
 # ROOT ENDPOINTS
 
