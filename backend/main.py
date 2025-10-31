@@ -60,9 +60,9 @@ async def collections_options():
 # CORS MIDDLEWARE CONFIGURATION
 
 # Get allowed origins from environment variable or use default
-default_origins = "http://localhost:3000,http://localhost:3001,https://ic-easy-backend.onrender.com"
+default_origins = "http://localhost:3000,https://iceasy.vercel.app"
 origins_env = os.getenv("CORS_ORIGINS", default_origins)
-origins = origins_env.split(",")
+origins = [origin.strip() for origin in origins_env.split(",")]
 
 logger.info(f"[CORS] Allowed origins: {origins}")
 
@@ -70,17 +70,13 @@ logger.info(f"[CORS] Allowed origins: {origins}")
 # This allows frontend applications to make requests to the backend API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-    "http://localhost:3000",
-    "https://iceasy.vercel.app",
-],     # Allow all origins for deployment (change after frontend is deployed)
+    allow_origins=origins,           # Use origins from environment variable
     allow_credentials=True,          # Allow cookies and authentication
     allow_methods=["*"],             # Allow all HTTP methods (GET, POST, etc.)
     allow_headers=["*"],             # Allow all headers
     expose_headers=["*"],            # Expose all headers to the client
     max_age=3600,                    # Cache preflight requests for 1 hour
 )
-
 
 
 # Create DB tables
