@@ -170,7 +170,7 @@ export default function SummarizeResultPage() {
             </div>
 
             {/* Success Banner */}
-            <div className="bg-gradient-to-r from-purple-50 via-blue-50 to-indigo-50 rounded-2xl p-6 border-2 border-purple-200 mb-6">
+            <div className="bg-gradient-to-r from-purple-50 via-pink-50 to-indigo-50 rounded-2xl p-6 border-2 border-purple-200 mb-6">
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-bold text-lg mb-1 text-gray-800">
@@ -180,7 +180,7 @@ export default function SummarizeResultPage() {
                     Powered by Google Chrome's Built-in AI Summarizer
                   </p>
                 </div>
-                <CheckCircle className="w-8 h-8 text-green-600" />
+                <CheckCircle className="w-8 h-8 text-purple-400" />
               </div>
             </div>
 
@@ -201,17 +201,19 @@ export default function SummarizeResultPage() {
             </div>
 
             {/* Info Box */}
-            <div className="bg-blue-50 rounded-2xl p-5 border border-blue-200">
-              <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                <Sparkles className="w-5 h-5" />
-                About this Summary
-              </h3>
-              <ul className="text-sm text-blue-700 space-y-1">
-                <li>• Generated using Google Chrome's on-device AI model</li>
-                <li>• Summary type: Key points extraction</li>
-                <li>• Processing is done locally on your device</li>
-                <li>• No data is sent to external servers</li>
-              </ul>
+            <div className="bg-grey-50/50 rounded-lg p-4 border border-grey-100">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-grey-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-grey-900 mb-2">
+                    About this Summary
+                  </p>
+                  <div className="text-sm text-grey-800 space-y-1">
+                    <p>Generated using Google Chrome's on-device AI model</p>
+                    <p>Summary type: Key points extraction</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Timestamp */}

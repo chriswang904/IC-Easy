@@ -23,14 +23,14 @@ export default function HeroBanner() {
           AI-powered research assistant for smarter paper discovery and writing
         </p>
         <div className="flex gap-3">
-          <button className="bg-white text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition flex items-center gap-2 shadow-lg">
+          {/* <button className="bg-white text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-gray-100 transition flex items-center gap-2 shadow-lg">
             <Zap size={18} />
             Get Started
           </button>
           <button className="bg-white/90 text-gray-800 px-6 py-2 rounded-lg font-semibold hover:bg-white transition flex items-center gap-2 shadow-lg">
             <BookOpen size={18} />
             Browse 10M+ Papers
-          </button>
+          </button> */}
         </div>
       </div>
     </section>

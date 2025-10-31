@@ -1,5 +1,3 @@
-// pages/AIToolPage.jsx
-
 import React, { useState } from "react";
 import {
   Upload,
@@ -10,6 +8,7 @@ import {
   Loader,
   AlertCircle,
   CheckCircle,
+  Info,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import Sidebar from "../components/Sidebar";
@@ -56,7 +55,6 @@ export default function AIToolPage() {
     const fileExtension = fileName.substring(fileName.lastIndexOf("."));
 
     try {
-      // Handle TXT files
       if (fileExtension === ".txt" || file.type === "text/plain") {
         const text = await file.text();
         if (!text || text.trim().length === 0) {
@@ -65,7 +63,6 @@ export default function AIToolPage() {
         return text;
       }
 
-      // Handle DOCX files
       if (
         fileExtension === ".docx" ||
         file.type ===
@@ -74,7 +71,6 @@ export default function AIToolPage() {
         const mammoth = await import("mammoth");
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
-
         if (!result.value || result.value.trim().length === 0) {
           throw new Error(
             "Could not extract text from DOCX file or file is empty."
@@ -83,14 +79,12 @@ export default function AIToolPage() {
         return result.value;
       }
 
-      // Handle PDF files
       if (fileExtension === ".pdf" || file.type === "application/pdf") {
         throw new Error(
           "PDF text extraction is not yet supported. Please convert to TXT or DOCX format."
         );
       }
 
-      // Handle DOC files (old Word format)
       if (fileExtension === ".doc") {
         throw new Error(
           "Old .doc format is not supported. Please save as .docx or .txt format."
@@ -107,8 +101,6 @@ export default function AIToolPage() {
   };
 
   const summarizeWithSimpleAlgorithm = (text) => {
-    // Simple extractive summarization algorithm
-    // Split into sentences
     const sentences = text
       .replace(/\n+/g, " ")
       .split(/[.!?]+/)
@@ -119,20 +111,16 @@ export default function AIToolPage() {
       throw new Error("No valid sentences found in the text.");
     }
 
-    // Score sentences based on various factors
     const scoredSentences = sentences.map((sentence, index) => {
       let score = 0;
 
-      // Position score (first and last sentences are often important)
       if (index === 0) score += 3;
       if (index === sentences.length - 1) score += 2;
       if (index < sentences.length * 0.2) score += 1;
 
-      // Length score (prefer medium-length sentences)
       const wordCount = sentence.split(/\s+/).length;
       if (wordCount >= 10 && wordCount <= 30) score += 2;
 
-      // Keyword density (look for important words)
       const importantWords = [
         "important",
         "significant",
@@ -155,7 +143,6 @@ export default function AIToolPage() {
       return { sentence, score, index };
     });
 
-    // Sort by score and take top sentences
     const summaryLength = Math.max(
       3,
       Math.min(10, Math.ceil(sentences.length * 0.3))
@@ -165,7 +152,6 @@ export default function AIToolPage() {
       .slice(0, summaryLength)
       .sort((a, b) => a.index - b.index);
 
-    // Create summary
     const summary = topSentences.map((s) => `• ${s.sentence}`).join(".\n\n");
 
     return {
@@ -175,7 +161,6 @@ export default function AIToolPage() {
   };
 
   const summarizeWithChrome = async (text) => {
-    // Detailed diagnostic check
     console.log("=== Chrome AI Diagnostics ===");
     console.log("'ai' in window:", "ai" in window);
     console.log("'Summarizer' in window:", "Summarizer" in window);
@@ -186,7 +171,6 @@ export default function AIToolPage() {
       console.log("window.ai properties:", Object.keys(window.ai));
     }
 
-    // Check for Summarizer API (correct way)
     if ("Summarizer" in window && window.Summarizer) {
       console.log("Attempting to use Summarizer API...");
       try {
@@ -209,7 +193,6 @@ export default function AIToolPage() {
 
           const summary = await summarizer.summarize(text);
           summarizer.destroy();
-
           return { summary, method: "chrome-ai" };
         }
       } catch (err) {
@@ -217,7 +200,6 @@ export default function AIToolPage() {
       }
     }
 
-    // Check for AI Language Model (Prompt API)
     if ("AILanguageModel" in window && window.AILanguageModel) {
       console.log("Attempting to use AILanguageModel (Prompt API)...");
       try {
@@ -234,7 +216,6 @@ export default function AIToolPage() {
             `Summarize this text into key points:\n\n${text.substring(0, 4000)}`
           );
           session.destroy();
-
           return { summary, method: "chrome-prompt" };
         }
       } catch (err) {
@@ -242,7 +223,6 @@ export default function AIToolPage() {
       }
     }
 
-    // Legacy check for window.ai (older API structure)
     if (window.ai?.languageModel) {
       console.log("Attempting to use window.ai.languageModel...");
       try {
@@ -259,7 +239,6 @@ export default function AIToolPage() {
             `Summarize this text into key points:\n\n${text.substring(0, 4000)}`
           );
           session.destroy();
-
           return { summary, method: "chrome-prompt" };
         }
       } catch (err) {
@@ -285,7 +264,6 @@ export default function AIToolPage() {
 
           const summary = await summarizer.summarize(text);
           summarizer.destroy();
-
           return { summary, method: "chrome-ai" };
         }
       } catch (err) {
@@ -293,7 +271,6 @@ export default function AIToolPage() {
       }
     }
 
-    // Fallback to simple algorithm
     console.log(
       "All Chrome AI methods unavailable - using client-side extractive summarization algorithm"
     );
@@ -317,7 +294,6 @@ export default function AIToolPage() {
           "[AITool] This may take 30-60 seconds for first-time model loading..."
         );
         const result = await checkAIOnly(file, true);
-
         console.log("[AITool] Check result:", result);
 
         navigate("/plagiarism-result", {
@@ -328,18 +304,15 @@ export default function AIToolPage() {
               unique_percent: result.unique_percent,
               plagiarism_risk: result.plagiarism_risk,
               plagiarism_method: result.plagiarism_method,
-
               ai_probability: result.ai_probability,
               is_ai_generated: result.is_ai_generated,
               ai_confidence: result.ai_confidence,
               ai_detection_method: result.ai_detection_method,
-
               overall_risk: result.overall_risk,
               sources_found: result.sources_found,
               top_sources: result.top_sources,
               report_url: result.report_url,
               recommendations: result.recommendations,
-
               details: result.details,
               timestamp: result.timestamp,
               filename: file.name,
@@ -349,11 +322,9 @@ export default function AIToolPage() {
       } else if (activeTab === "summarize") {
         console.log("[AITool] Extracting text from file...");
         const text = await extractTextFromFile(file);
-
         console.log("[AITool] Generating summary...");
         const result = await summarizeWithChrome(text);
 
-        // Navigate to a summary result page
         navigate("/summarize-result", {
           state: {
             summary: result.summary,
@@ -385,208 +356,142 @@ export default function AIToolPage() {
     }
   };
 
-  const features = [
-    {
-      icon: <Shield className="w-6 h-6" />,
-      title: "AI-Powered Detection",
-      description: "Advanced Winston Model for accurate plagiarism detection",
-    },
-    {
-      icon: <Clock className="w-6 h-6" />,
-      title: "Instant Results",
-      description: "Get your analysis in seconds, not minutes",
-    },
-    {
-      icon: <Sparkles className="w-6 h-6" />,
-      title: "AI Content Detection",
-      description: "Detects if text is generated by AI (ensemble model)",
-    },
-  ];
-
   return (
-    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200 overflow-y-auto">
+    <main className="bg-gradient-to-br from-purple-50 to-pink-50 min-h-screen border-8 border-purple-200">
       <div className="flex min-h-screen">
         <Sidebar />
-
         <div className="flex-1 flex justify-center items-start p-6">
-          <article className="bg-white rounded-t-3xl shadow-xl p-6 w-[90%] max-w-6xl min-h-screen">
-            {/* Hero Section */}
-            <section className="relative h-64 rounded-3xl overflow-hidden mb-8 shadow-2xl">
-              <div className="absolute inset-0">
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{ backgroundImage: "url('/images/aiToolPage.jpg')" }}
-                />
-                <div className="absolute inset-0 bg-black/30" />{" "}
-                {/* subtle dark overlay */}
+          <article className="bg-white rounded-t-3xl shadow-xl w-[90%] max-w-6xl px-8 py-12 min-h-screen">
+            {/* Header Section - Notion Style */}
+
+            <div className="mb-12 text-center">
+              <div className="mb-4">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 text-xs font-medium rounded-full border border-purple-200 shadow-sm">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Powered by Winston AI
+                </span>
               </div>
-
-              <div className="absolute top-10 right-20 w-32 h-32 bg-white/10 rounded-full blur-2xl animate-pulse"></div>
-              <div
-                className="absolute bottom-10 left-20 w-40 h-40 bg-pink-300/20 rounded-full blur-3xl animate-pulse"
-                style={{ animationDelay: "1s" }}
-              ></div>
-
-              <div className="absolute inset-0 flex flex-col justify-center items-center text-center px-6">
-                <div className="inline-block mb-3 px-4 py-1.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold">
-                  ✨ Powered by Winston AI
-                </div>
-                <h1 className="text-5xl font-bold text-white mb-3 tracking-tight">
-                  Check & Summarize Smarter
-                </h1>
-                <p className="text-purple-100 text-lg max-w-2xl">
-                  Upload your document for instant plagiarism and AI content
-                  detection
-                </p>
-              </div>
-            </section>
-
-            {/* Feature Cards */}
-            <div className="grid grid-cols-3 gap-4 mb-8">
-              {features.map((feature, index) => (
-                <div
-                  key={index}
-                  className="bg-white rounded-2xl p-5 shadow-md hover:shadow-xl transition-all hover:-translate-y-1 border border-purple-100"
-                >
-                  <div className="w-12 h-12 bg-gradient-to-br from-blue-900 via-blue-600 to-gray-200 rounded-xl flex items-center justify-center text-white mb-3">
-                    {feature.icon}
-                  </div>
-                  <h3 className="font-bold text-gray-800 mb-1">
-                    {feature.title}
-                  </h3>
-                  <p className="text-sm text-gray-600">{feature.description}</p>
-                </div>
-              ))}
+              <h1 className="text-5xl font-bold text-gray-900 mb-4 tracking-tight bg-gradient-to-r from-gray-900 via-purple-900 to-gray-900 bg-clip-text text-transparent">
+                Document Analysis
+              </h1>
+              <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
+                Upload your document for instant plagiarism detection, AI
+                content analysis, and smart summarization
+              </p>
             </div>
 
-            {/* Main Card */}
-            <div className="bg-white rounded-3xl shadow-xl overflow-hidden">
-              {/* Tabs */}
-              <div className="bg-gradient-to-r from-blue-50 via-gray-100 to-blue-50 px-8 py-6">
-                <div className="flex justify-center items-center gap-4">
+            {/* Main Content Card - Figma/Notion Style */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {/* Tabs - Minimal Style */}
+              <div className="border-b border-gray-200 bg-gray-50/50">
+                <div className="flex px-6">
                   <button
                     onClick={() => {
                       setActiveTab("plagiarism");
                       setFile(null);
                       setError(null);
                     }}
-                    className={`px-8 py-3 font-semibold transition-all flex items-center justify-center gap-2 rounded-2xl ${
+                    className={`relative px-6 py-4 text-sm font-medium transition-colors ${
                       activeTab === "plagiarism"
-                        ? "bg-gradient-to-r from-blue-900 to-blue-600 text-white shadow-lg scale-105"
-                        : "bg-white text-blue-700 hover:bg-blue-50 shadow-md"
+                        ? "text-gray-900"
+                        : "text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    {activeTab === "plagiarism" && <CheckCircle size={18} />}
                     Plagiarism Check
+                    {activeTab === "plagiarism" && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900"></div>
+                    )}
                   </button>
-
                   <button
                     onClick={() => {
                       setActiveTab("summarize");
                       setFile(null);
                       setError(null);
                     }}
-                    className={`px-8 py-3 font-semibold transition-all flex items-center justify-center gap-2 rounded-2xl ${
+                    className={`relative px-6 py-4 text-sm font-medium transition-colors ${
                       activeTab === "summarize"
-                        ? "bg-gradient-to-r from-blue-900 to-blue-600 text-white shadow-lg scale-105"
-                        : "bg-white text-blue-700 hover:bg-blue-50 shadow-md"
+                        ? "text-gray-900"
+                        : "text-gray-500 hover:text-gray-700"
                     }`}
                   >
-                    {activeTab === "summarize" && <CheckCircle size={18} />}
                     Summarize
+                    {activeTab === "summarize" && (
+                      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-900"></div>
+                    )}
                   </button>
                 </div>
               </div>
 
               {/* Content Area */}
               <div className="p-8">
-                {/* Error Display */}
+                {/* Error Display - Notion Style */}
                 {error && (
                   <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
-                      <p className="text-red-700 font-medium">Error</p>
-                      <p className="text-red-600 text-sm whitespace-pre-line">
+                      <p className="text-sm font-medium text-red-900">Error</p>
+                      <p className="text-sm text-red-700 mt-1 whitespace-pre-line">
                         {error}
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* Info Box */}
-                {activeTab === "plagiarism" && (
-                  <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                    <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                      <Sparkles className="w-5 h-5" />
-                      How it works
-                    </h3>
-                    <ul className="text-sm text-blue-700 space-y-1">
-                      <li>
-                        • <strong>AI Content Detection:</strong> Ensemble model
-                        (Winston AI)
-                      </li>
-                      <li>
-                        • <strong>Supported formats:</strong> TXT, DOCX, PDF (up
-                        to 10MB)
-                      </li>
-                    </ul>
+                {/* Info Box - Notion Callout Style */}
+                <div className="mb-6 p-4 bg-grey-50/50 rounded-lg border border-grey-100">
+                  <div className="flex items-start gap-3">
+                    <Info className="w-5 h-5 text-grey-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-grey-900 mb-2">
+                        {activeTab === "plagiarism"
+                          ? "About Plagiarism Detection"
+                          : "About Summarization"}
+                      </p>
+                      {activeTab === "plagiarism" ? (
+                        <div className="text-sm text-grey-800 space-y-1">
+                          <p>
+                            AI Content Detection using Winston AI ensemble model
+                          </p>
+                          <p>Supports TXT, DOCX, PDF files up to 10MB</p>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-grey-800 space-y-1">
+                          <p>
+                            Automatically uses the best available summarization
+                            method
+                          </p>
+                          <p>Supports .txt and .docx files up to 10MB</p>
+                          <p className="text-xs text-grey-700 mt-1">
+                            Note: Chrome AI requires Chrome Canary with flags
+                            enabled
+                          </p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+                </div>
 
-                {activeTab === "summarize" && (
-                  <div className="mb-6 p-4 bg-blue-50 rounded-xl border border-blue-200">
-                    <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                      <Sparkles className="w-5 h-5" />
-                      How it works
-                    </h3>
-                    <ul className="text-sm text-blue-700 space-y-1">
-                      <li>
-                        • <strong>Smart Summarization:</strong> Automatically
-                        uses the best available method
-                      </li>
-
-                      <li>
-                        • <strong>Supported formats:</strong> .txt and .docx
-                        files (up to 10MB)
-                      </li>
-                      <li>
-                        • <strong>Note:</strong> Chrome AI requires Chrome
-                        Canary with flags enabled
-                      </li>
-                    </ul>
-                  </div>
-                )}
-
-                {/* Upload Area */}
+                {/* Upload Area - Figma Style */}
                 <div
-                  className={`relative border-2 border-dashed rounded-3xl p-12 flex flex-col items-center justify-center text-center transition-all ${
+                  className={`relative border-2 border-dashed rounded-xl p-12 flex flex-col items-center justify-center text-center transition-all ${
                     dragActive
-                      ? "border-blue-500 bg-gradient-to-br from-blue-50 to-gray-100 scale-[1.02]"
-                      : "border-gray-400 bg-gradient-to-br from-gray-50/50 to-blue-50/50 hover:border-blue-400 hover:shadow-lg"
+                      ? "border-purple-500 bg-purple-50"
+                      : "border-gray-300 bg-gray-50/30 hover:border-gray-400 hover:bg-gray-50"
                   }`}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  {/* Decorative corners */}
-                  <div className="absolute top-4 left-4 w-8 h-8 border-t-2 border-l-2 border-gray-400 rounded-tl-lg"></div>
-                  <div className="absolute top-4 right-4 w-8 h-8 border-t-2 border-r-2 border-gray-400 rounded-tr-lg"></div>
-                  <div className="absolute bottom-4 left-4 w-8 h-8 border-b-2 border-l-2 border-gray-400 rounded-bl-lg"></div>
-                  <div className="absolute bottom-4 right-4 w-8 h-8 border-b-2 border-r-2 border-gray-400 rounded-br-lg"></div>
-
-                  <div
-                    className="w-20 h-20 bg-gradient-to-br from-blue-900 to-gray-400
- rounded-2xl flex items-center justify-center mb-4 shadow-lg"
-                  >
-                    <Upload className="w-10 h-10 text-white" />
+                  <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
+                    <Upload className="w-7 h-7 text-gray-600" />
                   </div>
 
-                  <p className="text-xl font-bold text-gray-800 mb-2">
-                    {file ? `📄 ${file.name}` : "Drag & drop your file here"}
+                  <p className="text-base font-medium text-gray-900 mb-1">
+                    {file ? `📄 ${file.name}` : "Drop your file here"}
                   </p>
-                  <p className="text-gray-500 mb-6">
-                    or click below to browse • Supports .PDF, .TXT, .DOCX • up
-                    to 10MB
+
+                  <p className="text-sm text-gray-500 mb-6">
+                    or click below to browse • PDF, TXT, DOCX • up to 10MB
                   </p>
 
                   <input
@@ -597,35 +502,36 @@ export default function AIToolPage() {
                     id="fileUpload"
                     disabled={loading}
                   />
+
                   <label
                     htmlFor="fileUpload"
-                    className={`cursor-pointer bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-3 rounded-xl font-semibold hover:from-purple-700 hover:to-indigo-700 transition-all shadow-lg hover:shadow-xl hover:scale-105 flex items-center gap-2 ${
+                    className={`cursor-pointer bg-gray-900 text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors flex items-center gap-2 ${
                       loading ? "opacity-50 cursor-not-allowed" : ""
                     }`}
                   >
-                    <FileText size={18} />
-                    {file ? "Choose Another File" : "Browse Files"}
+                    <FileText size={16} />
+                    {file ? "Change File" : "Browse Files"}
                   </label>
                 </div>
 
-                {/* Action Button */}
+                {/* Action Button - Notion Style */}
                 {file && (
-                  <div className="text-center mt-8">
+                  <div className="text-center mt-6">
                     <button
                       onClick={handleUpload}
                       disabled={loading}
-                      className="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-10 py-4 rounded-xl font-bold hover:from-purple-700 hover:to-pink-700 transition-all flex items-center justify-center gap-3 mx-auto shadow-lg hover:shadow-2xl hover:scale-105 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="bg-gray-300 text-gray-900 px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200"
                     >
                       {loading ? (
                         <>
-                          <Loader className="w-5 h-5 animate-spin" />
+                          <Loader className="w-4 h-4 animate-spin" />
                           Analyzing...
                         </>
                       ) : (
                         <>
-                          <Sparkles size={20} />
+                          <Sparkles size={16} />
                           {activeTab === "plagiarism"
-                            ? "Check Plagiarism & AI"
+                            ? "Check Document"
                             : "Generate Summary"}
                         </>
                       )}
