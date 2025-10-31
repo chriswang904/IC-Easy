@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { login, register, getErrorMessage, getCurrentUser } from "../api/auth";
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -156,7 +158,7 @@ export default function Login() {
   };
   const handleGoogleLogin = async () => {
     try {
-      const response = await fetch("/api/auth/google/login");
+      const response = await fetch(`${API_BASE_URL}/api/auth/google/login`);
       const data = await response.json();
 
       // Store state in sessionStorage for verification
