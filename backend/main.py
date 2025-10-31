@@ -10,7 +10,7 @@ registers routes, and sets up logging for the backend service.
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from api import literature, plagiarism, history, auth, recommendations  
+from api import literature, plagiarism, history, auth, recommendations, knowledge
 import os
 import logging
 import sys
@@ -242,6 +242,9 @@ app.include_router(history.router)
 
 app.include_router(recommendations.router)
 app.include_router(collections.router)
+
+app.include_router(knowledge.router)
+
 logger.info("[Route Registration] All routes registered successfully")
 # ROOT ENDPOINTS
 

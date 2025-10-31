@@ -17,6 +17,7 @@
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.12.2",
+    "d3-scale": "^4.0.2",
     "framer-motion": "^12.23.24",
     "gapi-script": "^1.2.0",
     "lexical": "^0.36.2",
@@ -25,9 +26,12 @@
     "pdfjs-dist": "^5.4.296",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-force-graph": "^1.48.1",
+    "react-force-graph-2d": "^1.29.0",
     "react-router-dom": "^7.9.3",
     "react-scripts": "5.0.1",
     "react-toastify": "^11.0.5",
+    "recharts": "^3.3.0",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

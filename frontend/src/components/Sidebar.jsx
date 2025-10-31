@@ -9,6 +9,7 @@ import {
   LogOut,
   Origami,
   Paperclip,
+  Share2,
 } from "lucide-react";
 
 function Sidebar() {
@@ -50,9 +51,15 @@ function Sidebar() {
   const handleLogout = () => {
     localStorage.removeItem("access_token");
     localStorage.removeItem("user");
+    
+    localStorage.clear();  
+    sessionStorage.clear(); 
+    
     setUser(null);
     setImageError(false);
     navigate("/login");
+    
+    window.location.href = "/login"; 
   };
 
   const handleMouseEnter = () => {
@@ -72,7 +79,7 @@ function Sidebar() {
     { icon: Sparkles, label: "TextLab", path: "/aitool" },
     { icon: Archive, label: "Collections", path: "/collections" },
     { icon: Paperclip, label: "References", path: "/references" },
-
+    { icon: Share2, label: "Knowledge", path: "/knowledge" },
     // { icon: Origami, label: "Polish", path: "/polish" },
   ];
 
@@ -104,7 +111,7 @@ function Sidebar() {
   };
 
   return (
-    <nav className="fixed left-0 top-0 h-screen flex flex-col items-center w-20 pt-11 pb-6 bg-gradient-to-b from-purple-100 to-pink-100">
+    <nav className="fixed left-0 top-0 h-screen flex flex-col items-center w-20 pt-11 pb-6 bg-gradient-to-b from-purple-100 to-pink-100 z-40">
       <div className="flex flex-col items-center gap-1">
         {/* Logo */}
         <button

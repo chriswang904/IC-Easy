@@ -16,6 +16,7 @@ import History from "./pages/History";
 import Login from "./pages/Login";
 import Welcome from "./pages/Welcome";
 import ReferencesPage from "./pages/ReferencesPage";
+import KnowledgeGraphPage from "./pages/KnowledgeGraphPage";
 
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -45,6 +46,7 @@ function App() {
           <Route path="/polish" element={<PolishPage />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/references" element={<ReferencesPage />} />
+          <Route path="/knowledge" element={<KnowledgeGraphPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
