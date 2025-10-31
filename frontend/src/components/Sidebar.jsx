@@ -8,6 +8,7 @@ import {
   User,
   LogOut,
   Origami,
+  Paperclip,
 } from "lucide-react";
 
 function Sidebar() {
@@ -70,6 +71,7 @@ function Sidebar() {
     { icon: Globe, label: "Explore", path: "/explore" },
     { icon: Sparkles, label: "TextLab", path: "/aitool" },
     { icon: Archive, label: "Collections", path: "/collections" },
+    { icon: Paperclip, label: "References", path: "/references" },
 
     // { icon: Origami, label: "Polish", path: "/polish" },
   ];

@@ -1,5 +1,5 @@
 # api/literature.py
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, File, UploadFile
 from fastapi.responses import PlainTextResponse
 from typing import List, Optional
 from models.schemas import (
@@ -23,7 +23,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 import logging
 from datetime import datetime
-
+import PyPDF2
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ TOPIC_TO_ARXIV = {
     "environment": "physics.ao-ph",
     "medicine": "q-bio.TO",
 }
+
 
 @router.post("/search", response_model=LiteratureSearchResponse)
 async def search_literature(request: LiteratureSearchRequest):
@@ -125,47 +126,60 @@ async def search_literature(request: LiteratureSearchRequest):
         raise HTTPException(status_code=500, detail=f"Literature search failed: {str(e)}")
     
 @router.get("/doi/{doi:path}", response_model=LiteratureItem)
-async def get_literature_by_doi(doi: str, source: str = Query(default="crossref", description="Data source to use")):
+async def get_literature_by_doi(
+    doi: str, 
+    source: str = Query(default="crossref", description="Data source to use")
+):
     """
-    Get specific literature details by DOI
-    
-    Args:
-        doi: Digital Object Identifier (e.g., 10.1000/xyz123)
-        source: Data source (crossref or openalex)
-        
-    Returns:
-        LiteratureItem object with full details
+    Get specific literature details by DOI (CrossRef + fallback to OpenAlex)
     """
+    # Normalize DOI (handle full URLs like https://doi.org/...)
+    doi = doi.replace("https://doi.org/", "").strip()
 
-    # Validate Parameter
-    if not doi.strip():
+    if not doi:
         logger.warning("[DOI Lookup] Empty DOI provided")
         raise HTTPException(status_code=400, detail="DOI cannot be empty")
-    
-    # Record Lookup
+
     logger.info(f"[DOI Lookup] Fetching literature - doi={doi}, source={source}")
-    
 
     try:
+        literature = None
+
+        # Try CrossRef first
         if source == "crossref":
             literature = crossref_service.get_by_doi(doi)
+            if not literature:
+                logger.warning(f"[DOI Lookup] CrossRef returned no result for {doi}, trying OpenAlex fallback...")
+                try:
+                    literature = openalex_service.get_by_doi(doi)
+                except Exception as e:
+                    logger.error(f"[DOI Lookup] OpenAlex fallback failed: {e}")
+
+        # Directly query OpenAlex if requested
         elif source == "openalex":
             literature = openalex_service.get_by_doi(doi)
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported source: {source}. Use 'crossref' or 'openalex'"
+                detail=f"Unsupported source: {source}. Use 'crossref' or 'openalex'."
             )
-        
-        if literature is None:
-            raise HTTPException(status_code=404, detail=f"Literature with DOI {doi} not found")
-        
+
+        # Return result or raise 404
+        if not literature:
+            logger.warning(f"[DOI Lookup] No metadata found for DOI {doi}")
+            raise HTTPException(
+                status_code=404, 
+                detail=f"No metadata found for DOI {doi}. Try manual entry."
+            )
+
         return literature
-        
+
     except HTTPException:
         raise
     except Exception as e:
+        logger.error(f"[DOI Lookup] Unexpected error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch literature: {str(e)}")
+
 
 @router.get("/arxiv/{arxiv_id}", response_model=LiteratureItem)
 async def get_literature_by_arxiv_id(arxiv_id: str):
@@ -268,6 +282,20 @@ async def format_reference(request: ReferenceFormatRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Reference formatting failed: {str(e)}")
+
+@router.post("/extract-pdf-metadata")
+async def extract_pdf_metadata(file: UploadFile = File(...)):
+    # Example: using PyPDF2 or pdfminer to extract title/authors from PDF
+    pdf_reader = PyPDF2.PdfReader(file.file)
+    meta = pdf_reader.metadata or {}
+
+    return {
+        "title": meta.get("/Title", ""),
+        "authors": [{"first": a, "last": ""} for a in meta.get("/Author", "").split(",") if a],
+        "year": 2025,
+        "publisher": "",
+    }
+
 
 @router.get("/health")
 async def health_check():
