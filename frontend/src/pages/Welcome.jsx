@@ -17,15 +17,17 @@ export default function Welcome() {
     const storedUser = JSON.parse(localStorage.getItem("user"));
     if (storedUser) {
       setUser(storedUser);
-      
+
       // Initialize with existing data if available
       if (storedUser.avatar_url) {
         setAvatarUrl(storedUser.avatar_url);
       } else {
         const randomSeed = Math.random().toString(36).substring(2, 10);
-        setAvatarUrl(`https://api.dicebear.com/9.x/adventurer/svg?seed=${randomSeed}`);
+        setAvatarUrl(
+          `https://api.dicebear.com/9.x/adventurer/svg?seed=${randomSeed}`
+        );
       }
-      
+
       if (storedUser.interests && storedUser.interests.length > 0) {
         setInterests(storedUser.interests);
       }
@@ -52,8 +54,11 @@ export default function Welcome() {
     setError(null);
 
     try {
-      console.log("[Welcome] Saving profile:", { interests, avatar_url: avatarUrl });
-      
+      console.log("[Welcome] Saving profile:", {
+        interests,
+        avatar_url: avatarUrl,
+      });
+
       // ✅ Call API and get updated user data
       const updatedUserData = await updateUserProfile({
         interests,
@@ -74,7 +79,7 @@ export default function Welcome() {
       console.log("[Welcome] localStorage updated:", completeUserData);
 
       // ✅ Navigate to homepage
-      navigate("/");
+      navigate("/explore");
     } catch (err) {
       console.error("[Welcome] Failed to save profile:", err);
       setError("Failed to save your preferences. Please try again.");
@@ -85,7 +90,7 @@ export default function Welcome() {
 
   const handleSkip = () => {
     console.log("[Welcome] User skipped profile setup");
-    navigate("/");
+    navigate("/explore");
   };
 
   if (!user) return <p className="text-center mt-10">Loading...</p>;
@@ -102,7 +107,9 @@ export default function Welcome() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex justify-center items-center p-6">
       <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md text-center">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Welcome to IC-Easy</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-2">
+          Welcome to IC-Easy
+        </h1>
         <p className="text-gray-600 mb-6">
           Customize your profile by choosing an avatar and your interests.
         </p>
@@ -116,7 +123,11 @@ export default function Welcome() {
 
         {/* Avatar Section */}
         <div className="flex flex-col items-center mb-6">
-          <img src={avatarUrl} alt="avatar" className="w-24 h-24 rounded-full mb-3" />
+          <img
+            src={avatarUrl}
+            alt="avatar"
+            className="w-24 h-24 rounded-full mb-3"
+          />
           <div className="flex flex-col items-center gap-3">
             {/* Style Selector with Inline Previews */}
             <div className="flex flex-col items-center gap-2">
@@ -126,7 +137,9 @@ export default function Welcome() {
                     key={style}
                     onClick={() => handleStyleChange(style)}
                     className={`border rounded-lg p-1 cursor-pointer hover:border-purple-500 transition ${
-                      avatarStyle === style ? "border-purple-500 border-2" : "border-gray-300"
+                      avatarStyle === style
+                        ? "border-purple-500 border-2"
+                        : "border-gray-300"
                     }`}
                   >
                     <img

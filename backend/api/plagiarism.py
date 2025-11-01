@@ -1,4 +1,4 @@
-# api/plagiarism.py (UPDATED)
+# api/plagiarism.py (UPDATED - Winston AI Only)
 """
 API routes for plagiarism and AI detection
 Integrates Winston AI 
@@ -10,8 +10,6 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from models.schemas import PlagiarismTextRequest
 
 from services.winston_ai_service import WinstonAIService
-from services.ai_detector_service import AIDetectorService
-
 
 logger = logging.getLogger(__name__)
 
@@ -25,45 +23,53 @@ async def check_ai_only(
     use_api: bool = Query(default=True, description="Use Winston AI API")
 ):
     """
-    AI-only content detection (accepts uploaded file).
+    AI-only content detection using Winston AI (accepts uploaded file).
     Reads text from the uploaded file and performs AI detection.
     """
     try:
         logger.info(f"[API] AI-only check (file): {file.filename}")
 
+        # Read and decode file
         raw_bytes = await file.read()
         text = raw_bytes.decode("utf-8", errors="ignore")
 
+        # Validate minimum text length
         if len(text.strip()) < 50:
             raise HTTPException(
                 status_code=400,
                 detail="File contains too little readable text (minimum 50 characters)."
             )
 
-        # --- Run detection ---
+        # --- Run Winston AI detection ---
         winston = WinstonAIService()
         result = await winston.detect_ai_content(text)
 
-        # If Winston AI fails → fallback to local Desklib model
+        # Check if Winston AI succeeded
         if result.get("status") != "success":
-            from services.ai_detector_service import AIDetectorService
-            local_detector = AIDetectorService()
-            if local_detector.is_service_available():
-                logger.info("[API] Falling back to local Desklib AI detector")
-                result = await local_detector.check_ai_content(text)
-                result["method"] = "Desklib Local Model"  
-                is_ai = False
-                method_used = "Desklib Local Model"
+            error_msg = result.get("error", "Winston AI detection failed")
+            logger.error(f"[API] Winston AI error: {error_msg}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Winston AI API error: {error_msg}. Please check your API key configuration."
+            )
 
-
-        if result.get("method", "").lower().startswith("winston"):
-            ai_prob = float(result.get("ai_probability", 0.0)) * 100.0   
-        else:
-            ai_prob = float(result.get("ai_probability", 0.0))         
-
-
-        # --- Normalize values ---
-        ai_prob = max(0.0, min(ai_prob, 100.0))
+        # --- Extract and normalize probability ---
+        # Winston AI returns probability as 0-1, convert to 0-100
+        ai_probability_raw = result.get("ai_probability")
+        
+        if ai_probability_raw is None:
+            logger.error(f"[API] Winston AI returned None for ai_probability: {result}")
+            raise HTTPException(
+                status_code=500,
+                detail="Winston AI returned invalid response. Please check API configuration."
+            )
+        
+        ai_prob = float(ai_probability_raw) * 100.0
+        ai_prob = max(0.0, min(ai_prob, 100.0))  # Clamp between 0-100
+        
+        # --- Determine if AI generated (threshold: 50%) ---
+        is_ai = ai_prob >= 50.0
+        method_used = result.get("method", "Winston AI")
 
         # --- Risk level classification ---
         if ai_prob >= 90:
@@ -75,23 +81,26 @@ async def check_ai_only(
         else:
             overall_risk = "low"
 
-        logger.info(f"[DEBUG] AI Detection Final Result: {result}")
-        logger.info(f"[DEBUG] ai_prob={ai_prob}, is_ai={is_ai}, method={method_used}")
+        logger.info(f"[API] AI Detection Complete:")
+        logger.info(f"  - Probability: {ai_prob:.2f}%")
+        logger.info(f"  - Is AI: {is_ai}")
+        logger.info(f"  - Method: {method_used}")
+        logger.info(f"  - Risk: {overall_risk}")
 
         # --- Final response payload ---
         return {
             "status": "success",
             "filename": file.filename,
-            "ai_probability": round(ai_prob, 4),
+            "ai_probability": round(ai_prob, 2),
             "is_ai_generated": is_ai,
             "method": method_used,
             "overall_risk": overall_risk,
             "details": {
                 "ai_detection": {
-                    "status": result.get("status"),
+                    "status": "success",
                     "method": method_used,
-                    "probability": ai_prob,
-                    "error": result.get("error")
+                    "probability": round(ai_prob, 2),
+                    "raw_response": result  # Include full Winston AI response for debugging
                 }
             },
             "recommendations": [
@@ -103,20 +112,27 @@ async def check_ai_only(
                         if is_ai else "Content Appears Human-Written"
                     ),
                     "suggestion": (
-                        "This text appears to have been generated by AI. "
+                        f"This text has a {ai_prob:.1f}% probability of being AI-generated. "
                         "Consider rewriting in your own words or adding clear disclosure."
                         if is_ai
-                        else "Your text appears authentic and human-written. No action needed."
+                        else f"Your text has only a {ai_prob:.1f}% probability of being AI-generated. "
+                        "It appears authentic and human-written."
                     ),
                 }
             ],
         }
 
-
     except HTTPException:
         raise
+    except ValueError as e:
+        logger.error(f"[API] Value conversion error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process Winston AI response: {str(e)}"
+        )
     except Exception as e:
-        logger.error(f"[API] check-ai-only error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-    
+        logger.error(f"[API] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
