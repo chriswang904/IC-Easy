@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { login, register, getErrorMessage, getCurrentUser } from "../api/auth";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL;
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "https://ic-easy-backend.onrender.com";
 
 export default function Login() {
   const navigate = useNavigate();
