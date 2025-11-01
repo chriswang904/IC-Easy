@@ -1,7 +1,10 @@
 // frontend/src/services/image_service.js
 import axios from "axios";
 
-console.log("[Unsplash] Service loaded. Key:", process.env.REACT_APP_UNSPLASH_ACCESS_KEY ? "found" : "missing");
+console.log(
+  "[Unsplash] Service loaded. Key:",
+  process.env.REACT_APP_UNSPLASH_ACCESS_KEY ? "found" : "missing"
+);
 
 const UNSPLASH_KEY = process.env.REACT_APP_UNSPLASH_ACCESS_KEY;
 
@@ -19,7 +22,10 @@ export async function getTopicImages(topicName, limit = 5) {
     });
     return res.data.results.map((img) => img.urls.small);
   } catch (err) {
-    console.error(`[Unsplash] Error fetching for topic: ${topicName}`, err.message);
+    console.error(
+      `[Unsplash] Error fetching for topic: ${topicName}`,
+      err.message
+    );
     return [];
   }
 }

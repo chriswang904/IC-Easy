@@ -13,7 +13,8 @@ import axios from "axios";
  * Base URL for the backend API
  * Empty string uses relative URLs which work with the proxy
  */
-const BASE_URL = process.env.REACT_APP_API_BASE_URL || ""; // ← CHANGED: Empty string instead of localhost:8000
+const BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "https://ic-easy-backend.onrender.com"; // ← CHANGED: Empty string instead of localhost:8000
 
 /**
  * Create axios instance with default configuration

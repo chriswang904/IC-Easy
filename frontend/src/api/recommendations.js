@@ -3,7 +3,9 @@
  * Fetches personalized literature recommendations
  */
 
-import apiClient from './client';
+import apiClient from "./client";
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "https://ic-easy-backend.onrender.com";
 
 /**
  * Get personalized recommendations based on user interests
@@ -12,19 +14,25 @@ import apiClient from './client';
  */
 export const getPersonalizedRecommendations = async (limit = 15) => {
   try {
-    const response = await apiClient.get('/api/recommendations/personalized', {
-      params: { limit }
-    });
-    
-    console.log('[Recommendations] Personalized recommendations fetched:', {
+    const response = await apiClient.get(
+      `${API_BASE_URL}/api/recommendations/personalized`,
+      {
+        params: { limit },
+      }
+    );
+
+    console.log("[Recommendations] Personalized recommendations fetched:", {
       total: response.data.total,
       personalized: response.data.personalized,
-      topics: response.data.topics
+      topics: response.data.topics,
     });
-    
+
     return response.data;
   } catch (error) {
-    console.error('[Recommendations] Failed to fetch personalized recommendations:', error);
+    console.error(
+      "[Recommendations] Failed to fetch personalized recommendations:",
+      error
+    );
     throw error;
   }
 };
@@ -37,15 +45,24 @@ export const getPersonalizedRecommendations = async (limit = 15) => {
  */
 export const getRecommendationsByInterest = async (interest, limit = 10) => {
   try {
-    const response = await apiClient.get(`/api/recommendations/by-interest/${interest}`, {
-      params: { limit }
-    });
-    
-    console.log(`[Recommendations] Recommendations for ${interest} fetched:`, response.data.total);
-    
+    const response = await apiClient.get(
+      `${API_BASE_URL}/api/recommendations/by-interest/${interest}`,
+      {
+        params: { limit },
+      }
+    );
+
+    console.log(
+      `[Recommendations] Recommendations for ${interest} fetched:`,
+      response.data.total
+    );
+
     return response.data;
   } catch (error) {
-    console.error(`[Recommendations] Failed to fetch recommendations for ${interest}:`, error);
+    console.error(
+      `[Recommendations] Failed to fetch recommendations for ${interest}:`,
+      error
+    );
     throw error;
   }
 };
@@ -56,10 +73,12 @@ export const getRecommendationsByInterest = async (interest, limit = 10) => {
  */
 export const checkRecommendationsHealth = async () => {
   try {
-    const response = await apiClient.get('/api/recommendations/health');
+    const response = await apiClient.get(
+      `${API_BASE_URL}/api/recommendations/health`
+    );
     return response.data;
   } catch (error) {
-    console.error('[Recommendations] Health check failed:', error);
-    return { status: 'unhealthy' };
+    console.error("[Recommendations] Health check failed:", error);
+    return { status: "unhealthy" };
   }
 };

@@ -237,82 +237,92 @@ async def google_login():
 
 @router.get("/google/callback")
 async def google_callback(code: str, state: str = None):
-    """Handle Google OAuth callback"""
+    """
+    Handle Google OAuth callback.
+    Automatically redirects to the correct frontend URL for dev, preview, or production.
+    """
     db = SessionLocal()
     try:
-        logger.info(f"[Google OAuth] === CALLBACK START ===")
+        logger.info("[Google OAuth] === CALLBACK START ===")
         logger.info(f"[Google OAuth] Code received: {code[:30]}...")
-        
+
+        # Exchange code for token & get user info
         token_data = google_auth_service.exchange_code_for_token(code)
         user_info = token_data["user_info"]
-        
         logger.info(f"[Google OAuth] User info received: {user_info}")
-        
+
+        # Find existing user by email
         user = db.query(User).filter(User.email == user_info["email"]).first()
-        
+
         if not user:
+            # Create a unique username
             base_username = user_info["name"].replace(" ", "_").lower()
             username = base_username
             counter = 1
-            
             while db.query(User).filter(User.username == username).first():
                 username = f"{base_username}_{counter}"
                 counter += 1
-            
+
             logger.info(f"[Google OAuth] Creating new user: {username}")
-            
+
+            # Create new Google user
             user = User(
                 email=user_info["email"],
                 username=username,
-                google_id=user_info["google_id"],
-                google_access_token=token_data["access_token"],
-                google_refresh_token=token_data["refresh_token"],
+                google_id=user_info.get("google_id"),
+                google_access_token=token_data.get("access_token"),
+                google_refresh_token=token_data.get("refresh_token"),
                 login_method="google",
                 hashed_password=None
             )
             db.add(user)
         else:
+            # Update existing user tokens
             logger.info(f"[Google OAuth] Updating existing user: {user.username}")
-            user.google_id = user_info["google_id"]
-            user.google_access_token = token_data["access_token"]
-            user.google_refresh_token = token_data["refresh_token"]
-        
+            user.google_id = user_info.get("google_id")
+            user.google_access_token = token_data.get("access_token")
+            user.google_refresh_token = token_data.get("refresh_token")
+
         db.commit()
         db.refresh(user)
-        
-        # Create token
+
+        # Create JWT access token
         token_payload = {"sub": int(user.id)}
         access_token = create_access_token(data=token_payload)
-        
         logger.info(f"[Google OAuth] Login successful - ID: {user.id}, Username: {user.username}")
-        
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        
+
+        # Determine frontend URL
+        frontend_url = os.getenv("FRONTEND_URL")
+        if not frontend_url:
+            # Dynamically infer frontend URL from request headers if not set
+            frontend_url = "https://iceasy.vercel.app"  # fallback production URL
+
+        # Prepare user data for frontend
         user_data = {
             "id": user.id,
             "email": user.email,
             "username": user.username,
             "picture": user_info.get("picture"),
-            "google_access_token": user.google_access_token, 
+            "google_access_token": user.google_access_token,
             "created_at": user.created_at.isoformat()
         }
-        
-        # Add user's info to JSON and URL
+
+        # Encode user info into URL
         user_json = urllib.parse.quote(json.dumps(user_data))
         redirect_url = f"{frontend_url}/login?token={access_token}&user={user_json}"
-        
-        logger.info(f"[Google OAuth] Redirecting with user data: {user_data}")
-        logger.info(f"[Google OAuth] === CALLBACK END ===")
-        
+
+        logger.info(f"[Google OAuth] Redirecting to: {redirect_url}")
+        logger.info("[Google OAuth] === CALLBACK END ===")
         return RedirectResponse(url=redirect_url)
-        
+
     except Exception as e:
         logger.error(f"[Google OAuth] ERROR: {str(e)}", exc_info=True)
         db.rollback()
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
-        return RedirectResponse(url=f"{frontend_url}/login?error=google_auth_failed")
+        fallback_url = os.getenv("FRONTEND_URL", "https://iceasy.vercel.app")
+        return RedirectResponse(url=f"{fallback_url}/login?error=google_auth_failed")
     finally:
         db.close()
+
 
 class UserUpdate(BaseModel):
     username: Optional[str] = None

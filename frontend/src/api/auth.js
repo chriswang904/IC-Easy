@@ -5,22 +5,72 @@
 import apiClient from "./client";
 
 /**
+ * Base URL for API
+ */
+// const API_BASE_URL =process.env.REACT_APP_API_BASE_URL || "https://ic-easy-backend.onrender.com";
+
+/**
  * Register new user
  */
+/**
+ * Register new user
+ */
+const API_BASE_URL = "https://ic-easy-backend.onrender.com";
+
+console.log("[Auth Module] Using API_BASE_URL:", API_BASE_URL);
+
 export const register = async ({ email, username, password }) => {
   try {
-    const response = await apiClient.post("/api/auth/register", {
+    const requestBody = {
       email,
       username,
       password,
+      interests: [],
+      avatar_url: null,
+    };
+
+    console.log("[Auth] Sending registration data:", requestBody);
+
+    const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json", // ✅ Changed to JSON
+      },
+      body: JSON.stringify(requestBody), // ✅ Send as JSON
     });
 
-    // Save token and user info
-    localStorage.setItem("access_token", response.data.access_token);
-    localStorage.setItem("user", JSON.stringify(response.data.user));
+    console.log("[Auth] Raw Response Status:", response.status);
 
-    console.log("[Auth] Registration successful:", response.data.user.username);
-    return response.data;
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("[Auth] Registration error:", errorData);
+
+      // Handle validation errors
+      if (errorData.detail) {
+        if (Array.isArray(errorData.detail)) {
+          const errorMsg = errorData.detail
+            .map((err) => `${err.loc?.[1] || "Field"}: ${err.msg}`)
+            .join(", ");
+          throw new Error(errorMsg);
+        }
+        throw new Error(errorData.detail);
+      }
+
+      throw new Error(`Registration failed (status ${response.status})`);
+    }
+
+    const data = await response.json();
+    console.log("[Auth] Registration successful:", data);
+
+    // Save token and user info
+    if (data.access_token) {
+      localStorage.setItem("access_token", data.access_token);
+    }
+    if (data.user) {
+      localStorage.setItem("user", JSON.stringify(data.user));
+    }
+
+    return data;
   } catch (error) {
     console.error("[Auth] Registration failed:", error);
     throw error;
@@ -38,7 +88,7 @@ export const login = async ({ username, password }) => {
 
     console.log("[Auth] Sending login data:", params.toString());
 
-    const response = await fetch("/api/auth/login", {
+    const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: params.toString(),
@@ -65,12 +115,20 @@ export const login = async ({ username, password }) => {
       avatar_url:
         user.avatar_url ||
         data.avatar_url ||
-        `https://api.dicebear.com/9.x/adventurer/svg?seed=${user.username || username}`,
+        `https://api.dicebear.com/9.x/adventurer/svg?seed=${
+          user.username || username
+        }`,
       interests: Array.isArray(user.interests)
         ? user.interests
-        : (typeof user.interests === "string"
-            ? (() => { try { return JSON.parse(user.interests); } catch { return []; } })()
-            : []),
+        : typeof user.interests === "string"
+        ? (() => {
+            try {
+              return JSON.parse(user.interests);
+            } catch {
+              return [];
+            }
+          })()
+        : [],
       access_token: data.access_token,
       is_new_user: !!data.is_new_user,
     };
@@ -79,16 +137,12 @@ export const login = async ({ username, password }) => {
     localStorage.setItem("user", JSON.stringify(userData));
 
     console.log("[Auth] User saved to localStorage:", userData);
-    return userData; 
+    return userData;
   } catch (error) {
     console.error("[Auth] Login failed:", error);
     throw error;
   }
 };
-
-
-
-
 
 /**
  * Logout user
@@ -104,7 +158,7 @@ export const logout = () => {
  */
 export const getCurrentUser = async () => {
   try {
-    const response = await apiClient.get("/api/auth/me");
+    const response = await apiClient.get(`${API_BASE_URL}/api/auth/me`);
     return response.data;
   } catch (error) {
     console.error("[Auth] Failed to get current user:", error);

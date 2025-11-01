@@ -307,7 +307,7 @@ export default function EssayEditor() {
     try {
       localStorage.setItem("redirect_after_login", window.location.pathname);
       const response = await fetch(
-        "http://localhost:8000/api/auth/google/login"
+        "https://ic-easy-backend.onrender.com/api/auth/google/login"
       );
       const data = await response.json();
       if (data.auth_url) {

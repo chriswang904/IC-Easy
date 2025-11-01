@@ -4,7 +4,11 @@ import apiClient from "./client"; // ← Use the shared client
  * Update user profile (interests and avatar)
  * @param {Object} data - { interests: [...], avatar_url: "..." }
  * @returns {Promise<Object>} Updated user data
+ *
  */
+
+const API_BASE_URL =
+  process.env.REACT_APP_API_BASE_URL || "https://ic-easy-backend.onrender.com";
 export async function updateUserProfile(data) {
   const token = localStorage.getItem("access_token");
   if (!token) {
@@ -15,7 +19,10 @@ export async function updateUserProfile(data) {
     console.log("[User API] Updating profile:", data);
 
     // Use apiClient instead of axios directly
-    const response = await apiClient.patch("/api/auth/user/update", data);
+    const response = await apiClient.patch(
+      `${API_BASE_URL}/api/auth/user/update`,
+      data
+    );
 
     console.log("[User API] Profile updated successfully:", response.data);
 
