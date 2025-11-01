@@ -159,7 +159,10 @@ export default function Login() {
   };
   const handleGoogleLogin = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/google/login`);
+      const url = "https://ic-easy-backend.onrender.com/api/auth/google/login";
+      console.log("[Google Login] Fetching:", url);
+
+      const response = await fetch(url);
       const data = await response.json();
 
       // Store state in sessionStorage for verification
